@@ -1,0 +1,3369 @@
+package com.ibsplc.icargo.test.api;
+
+import java.util.HashMap;
+
+import org.apache.log4j.Logger;
+import org.json.JSONObject;
+import org.junit.Assert;
+import org.openqa.selenium.WebDriver;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
+import com.ibsplc.icargo.apiutility.shared.APIUtil;
+import com.ibsplc.icargo.generic.TestData;
+import com.ibsplc.icargo.pageobjects.base.BasePage;
+import com.ibsplc.icargo.pageobjects.shared.HomePage;
+import com.ibsplc.icargo.pageobjects.shared.LoginPage;
+import com.ibsplc.icargo.utils.BizUtility;
+import com.ibsplc.iraft.annotations.IRaftTest;
+import com.ibsplc.iraft.annotations.TestProperties;
+import com.ibsplc.iraft.driver.SingleSessionSetup;
+import io.restassured.RestAssured;
+import io.restassured.response.Response;
+import org.json.JSONArray;
+
+@TestProperties(module = "api", name = "API_testing")
+public class API_testing extends SingleSessionSetup {
+	String className = this.getClass().getAnnotation(TestProperties.class).name();
+	HashMap<String, String> localData, globalData;
+	Logger logger = Logger.getLogger(API_testing.class);
+	HomePage hp;
+	WebDriver driver;
+
+	@BeforeClass
+	public void prepare() {
+		TestData.setTestDataForClass(this);
+	}
+
+	/**************************** CLASS LEVEL UTILS ****************************/
+
+	String lData(String key) {
+		return TestData.getTestData(className, key);
+	}
+
+	String gData(String key) {
+		return TestData.getGlobalData(key);
+	}
+
+	String iData(String key) {
+		return TestData.getInterimData(className, key);
+	}
+
+	void setInterimData(String key, String value) {
+		TestData.setInterimData(className, key, value);
+	}
+
+	HomePage login(String user) {
+
+		if (this.driver != super.driver) {
+			this.driver = super.driver;
+			LoginPage lp = new LoginPage(driver);
+			hp = lp.login(user, gData("PASSWORDNEW"), gData("COMPANY_CODE"));
+		}
+		return hp;
+	}
+
+// Generete Authorisation tocken
+
+	@Test(enabled = true, groups = { "QF" }, priority = 0)
+	public void getSessionId() throws Exception {
+		RestAssured.baseURI = "http://k8s-qfbetang-qfbetang-7ffa2e7e8b-2eb51f93f129d7ff.elb.ap-south-1.amazonaws.com";
+		Response res = RestAssured.given().contentType("application/x-www-form-urlencoded; charset=utf-8")
+				.header("Content-Type", "application/x-www-form-urlencoded")
+				.header("x-api-key", "eE4hgx09Y2aFJrUSYiudqAPuAmX7Z8xaMNIsN2ne").formParam("username", "ICOADMIN")
+				.formParam("password", "weblogic").when().request().post("/auth/qf/enterprise/v1/authenticate").then()
+				.log().all().extract().response();
+		APIUtil ap = new APIUtil("", "");
+		String sessionId = ap.getNodeValueFromJsonResponse(ap.returnJSONObjectFromResponse(res), "security.id_token");
+		TestData.setInterimData(className, "sessionId", sessionId);
+
+	}
+
+// Create operational flight details
+	@Test(enabled = true, groups = { "QF" }, priority = 1)
+	@IRaftTest(testCaseID = "TC_QF_01", testDesc = "Create operational flight details", author = "A-10839")
+	public void createOperationalFlight() throws Exception {
+		
+		String fltNo1 = BizUtility.createFlightNumWithRange(1000, 2999);
+
+		TestData.setInterimData(className, "fltNo1", fltNo1);
+		String fullFlightnum = gData("CARRIER_CODE") + fltNo1;
+		TestData.setInterimData(className, "fullFlightnum", fullFlightnum);
+		TestData.setInterimData(className, "fltNo1_date", BasePage.getDate(0, "dd-MMM-YYYY"));
+		int time1Hr = BasePage.getCurrentTimeHr(5, 30, 0);
+		int time1Min = BasePage.getCurrentTimeMin(4, 00, 0);
+		String time1HH = (time1Hr + "").length() >= 2 ? (time1Hr + "") : "0" + time1Hr;
+		String time1MIN = (time1Min + "").length() >= 2 ? (time1Min + "") : "0" + time1Min;
+		TestData.setInterimData(className, "STD_TIME", time1HH + ":" + time1MIN + ":57+10:00");
+		String STD = BasePage.getDate(0, "YYYY-MM-dd") + "T" + iData("STD_TIME");
+		TestData.setInterimData(className, "STD", STD);
+
+		String[] tagName1 = { "owner", "truck_type", "offer_display", "truck_vendor", "schedule_type", "flight_number",
+				"origin", "destination", "control_office", "leg[0].STA", "leg[0].STD", "leg[0].departure_position",
+				"leg[0].origin", "leg[0].aircraft", "leg[0].destination", "leg[0].departure_gate", "leg[0].ATA",
+				"leg[0].operating_reference[0].flight_number", "leg[0].operating_reference[0].carrier_code",
+				"leg[0].ATD", "leg[0].departure_terminal", "leg[0].service_type", "leg[0].ETA", "leg[0].ETD",
+				"leg[0].nonoperating_reference[0].flight_number", "leg[0].nonoperating_reference[0].carrier_code",
+				"leg[0].tail_number", "leg[0].arrival_position", "leg[0].aircraft_owner", "leg[0].arrival_gate",
+				"leg[0].arrival_terminal", "control_stations", "route", "flight_date", "flight_type", "domestic_flight",
+				"remarks", "carrier_code", "status", };
+
+		Object[] tagValue1 = { "QF", "FLTBED", true, "DHLSYD", "Own", fltNo1, "SYD", "MEL", "SYD",
+				iData("STD").split("T")[0] + "T16:39:57+10:00", iData("STD").split("T")[0] + "T09:13:57+10:00", "T3",
+				"SYD", "762", "MEL", "BAY1", iData("STD").split("T")[0] + "T16:39:57+10:00", fltNo1, "QF",
+				iData("STD").split("T")[0] + "T13:30:57+10:00", "T1", "J",
+				iData("STD").split("T")[0] + "T16:39:57+10:00", iData("STD").split("T")[0] + "T13:30:57+10:00", fltNo1,
+				"QF", "ZKFXL", "F1", "QF", "BAY3", "T3", "SYD", "SYD-MEL", iData("STD").split("T")[0], "Combination",
+				false, "Flight remarks", "QF", "Active", };
+
+		String endPoint1 = "/icargo-api/qf/enterprise/v1/flights/" + fullFlightnum + "-" + iData("fltNo1_date");
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("saveFlight.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(endPoint1, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+	// specific date range search
+
+	@Test(enabled = true, groups = { "QF" }, priority = 2)
+
+	@IRaftTest(testCaseID = "TC_QF_02", testDesc = "Retrieve a list of operational flights based on specific date range", author = "A-10839")
+	public void retrieveListOperaionalFlightDate() throws Exception {
+
+		String search_fltdate = BasePage.getDate(+2, "YYYY-MM-dd");
+		TestData.setInterimData(className, "search_fltdate", search_fltdate);
+		String[] tagName1 = { "carrier_code" };
+		Object[] tagValue1 = { gData("CARRIER_CODE") };
+		String date_endpoint = "/icargo-api/qf/enterprise/v1/flights/" + iData("STD").split("T")[0] + "/"
+				+ iData("search_fltdate") + "/search";
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("search.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(date_endpoint, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONArray responseArray = new JSONArray(resp1.asString());
+		JSONObject respJson = responseArray.getJSONObject(0);
+		String flight = sp1.getNodeValueFromJsonResponse(respJson, "flight_number");
+	    System.out.println("flight_number:" + flight);
+		TestData.setInterimData(className, "flight_number", flight);
+		String route = sp1.getNodeValueFromJsonResponse(respJson, "route");
+		System.out.println("route:" + route);
+		TestData.setInterimData(className, "route", route);
+		String status = sp1.getNodeValueFromJsonResponse(respJson, "status");
+		System.out.println("status:" + status);
+		Assert.assertEquals("Active",status.contains("Active"));
+	}
+
+	// specific direction search
+
+	@Test(enabled = true, groups = { "QF" }, priority = 3)
+
+	@IRaftTest(testCaseID = "TC_QF_03", testDesc = "Retrieve a list of operational flights based on specific Direction", author = "A-10839")
+	public void retrieveListOperaionalFlightDirection() throws Exception {
+
+		String[] tagName1 = { "carrier_code" };
+		Object[] tagValue1 = { gData("CARRIER_CODE") };
+		String direction_endpoint = "/icargo-api/qf/enterprise/v1/flights/" + lData("ORIGIN_OUTBOUND")
+				+ iData("STD").split("T")[0] + "/" + iData("STD").split("T")[0] + "/search";
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("search.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(direction_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONArray responseArray = new JSONArray(resp1.asString());
+		JSONObject respJson = responseArray.getJSONObject(0);
+		String flight = sp1.getNodeValueFromJsonResponse(respJson, "flight_number");
+		System.out.println("flight_number:" + flight);
+		TestData.setInterimData(className, "flight_number", flight);
+		String route = sp1.getNodeValueFromJsonResponse(respJson, "route");
+
+		System.out.println("route:" + route);
+		TestData.setInterimData(className, "route", route);
+		String status = sp1.getNodeValueFromJsonResponse(respJson, "status");
+		Assert.assertEquals("Active",status.contains("Active"));
+	}
+	// save movement details
+
+	@Test(enabled = true, groups = { "QF" }, priority = 4)
+
+	@IRaftTest(testCaseID = "TC_QF_04", testDesc = "save movement details of an operational flight", author = "A-10839")
+	public void saveMovement() throws Exception {
+		String movmntDT = BasePage.getDate(0, "ddMMMYYYY");
+		TestData.setInterimData(className, "movmntDT", movmntDT);
+		String[] tagName1 = { "flight_origin", "legs[0].origin", "legs[0].destination" };
+		Object[] tagValue1 = { lData("DESTINATION"), lData("DESTINATION"), lData("ORIGIN") };
+		String save_mvmnt_endpoint = "/icargo-api/qf/enterprise/v1/flights/" + iData("fullFlightnum") + "-"
+				+ iData("movmntDT") + "/movement";
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("saveMovement.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(save_mvmnt_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+
+	// list movement details
+
+	@Test(enabled = true, groups = { "QF" }, priority = 5)
+
+	@IRaftTest(testCaseID = "TC_QF_05", testDesc = "listFlightMovement", author = "A-10839")
+	public void listMovement() throws Exception {
+
+		String list_mvmnt_endpoint = "/icargo-api/qf/enterprise/v1/flights/" + iData("fullFlightnum") + "-"
+				+ iData("movmntDT") + "/movement";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		Response resp1 = sp1.sendRESTGETRequest(list_mvmnt_endpoint, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String flight_origin = sp1.getNodeValueFromJsonResponse(response1, "flight_origin");
+		TestData.setInterimData(className, "flight_origin", flight_origin);
+		String legorigin = sp1.getNodeValueFromJsonResponse(response1, "legs[0].origin");
+		TestData.setInterimData(className, "legorigin", legorigin);
+		String legdestination = sp1.getNodeValueFromJsonResponse(response1, "legs[0].destination");
+		TestData.setInterimData(className, "legdestination", legdestination);
+
+		Assert.assertEquals("flight origin - Verified", lData("ORIGIN"), iData("flight_origin"));
+		Assert.assertEquals("leg destination - Verified", lData("DESTINATION"), iData("legdestination"));
+	}
+
+	// getFlightDetails
+
+	@Test(enabled = true, groups = { "QF" }, priority = 6)
+	@IRaftTest(testCaseID = "TC_QF_06", testDesc = "getFlightDetails", author = "A-10839")
+	public void getFlightDetails() throws Exception {
+
+		String getFlight_endpoint = "/icargo-api/qf/enterprise/v1/flights/" + iData("fullFlightnum") + "-"
+				+ iData("movmntDT");
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		Response resp1 = sp1.sendRESTGETRequest(getFlight_endpoint, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String flight_origin = sp1.getNodeValueFromJsonResponse(response1, "origin");
+		TestData.setInterimData(className, "flight_origin", flight_origin);
+
+		String destination = sp1.getNodeValueFromJsonResponse(response1, "destination");
+		TestData.setInterimData(className, "destination", destination);
+
+		Assert.assertEquals("flight origin - Verified", lData("ORIGIN"), iData("flight_origin"));
+		Assert.assertEquals("destination - Verified", lData("DESTINATION"), iData("destination"));
+	}
+	// Cancel operational flight
+
+	@Test(enabled = true, groups = { "QF" }, priority = 7)
+	@IRaftTest(testCaseID = "TC_QF_07", testDesc = "Cancel operational flight", author = "A-10839")
+	public void cancelOperationalFlight() throws Exception {
+		String cancelDT = BasePage.getDate(0, "ddMMMYYYY");
+		TestData.setInterimData(className, "cancelDT", cancelDT);
+		String CANCEL_ENDPOINT = lData("NEO_URL") + "/icargo-api/qf/enterprise/v1/flights/" + iData("fullFlightnum")
+				+ "-" + iData("cancelDT");
+		APIUtil api = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		Response resp = api.sendRESTDELETERequest(CANCEL_ENDPOINT, "Content-Type", "application/json", "x-api-key",
+				lData("API_KEY"), "ICO-Authorization", iData("sessionId"));
+
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("flight cancelled successfully"),
+				"Flight cancelled successfully");
+	}
+
+	// Create flight schedule details
+	// Update flight schedule details
+	/***************************** END OF FLIGHT API ***********************/
+//Stock API
+
+// 1. Get Next AWB
+
+	@Test(enabled = true, groups = { "QF" }, priority = 8)
+	@IRaftTest(testCaseID = "TC_QF_08", testDesc = "Get Next AWB", author = "A-10839")
+	public void getNextAWB() throws Exception {
+		
+		String[] tagName1 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue1 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("findNext.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(nextAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String document_number = sp1.getNodeValueFromJsonResponse(response1, "document_number");
+		TestData.setInterimData(className, "document_number", document_number);
+	}
+
+// 2.Return AWB
+	@Test(enabled = true, groups = { "QF" }, priority = 9)
+	@IRaftTest(testCaseID = "TC_QF_09", testDesc = "Return AWB", author = "A-10839")
+	public void returnAWB() throws Exception {
+		String[] tagName1 = { "agent", "document_number", "document_type", "document_subtype" };
+		Object[] tagValue1 = { lData("AGENT"), iData("document_number"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String returnAWB_endpoint = "/stock/qf/enterprise/v1/documents/" + iData("document_number") + "/return";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("returnAWB.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(returnAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("document returned to stock"),
+				"Document Returned to Stock");
+
+	}
+
+// 3.Utilize AWB
+
+	@Test(enabled = true, groups = { "QF" }, priority = 10)
+	@IRaftTest(testCaseID = "TC_QF_10", testDesc = "Utilize AWB", author = "A-10839")
+	public void utilizeAWB() throws Exception {
+		
+		String[] tagName1 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue1 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String utilizeAWB_endpoint = "/icargo-api/qf/enterprise/v1/documents/" + iData("document_number") + "/utilize";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("findNext.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(utilizeAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("document depleted from stock"),
+				"Document Depleted from Stock");
+
+	}
+
+// 4.Validate stock
+	@Test(enabled = true, groups = { "QF" }, priority = 11)
+	@IRaftTest(testCaseID = "TC_QF_11", testDesc = "Validate stock", author = "A-10839")
+	public void validateAWB() throws Exception {
+		String[] tagName1 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue1 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("findNext.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(nextAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String docu_num = sp1.getNodeValueFromJsonResponse(response1, "document_number");
+		TestData.setInterimData(className, "docu_num", docu_num);
+		
+
+		String[] tagName = { "agent", "document_number", "document_type", "document_subtype" };
+		Object[] tagValue = { lData("AGENT"), iData("document_number"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String validateAWB_endpoint = "/stock/qf/enterprise/v1/documents/" + iData("docu_num")
+				+ "/validate";
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp1.updateNestedJsonwithJsonObjects("findNext.json", tagName, tagValue);
+
+		Response resp = sp.sendRESTPOSTRequest(validateAWB_endpoint, requestjson, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response = sp1.returnJSONObjectFromResponse(resp);
+
+		String number = sp.getNodeValueFromJsonResponse(response, "document_number");
+		TestData.setInterimData(className, "document_number", number);
+		Assert.assertEquals("Document number- Verified", iData("docu_num"), number);
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 12)
+	@IRaftTest(testCaseID = "TC_QF_12", testDesc = "Get Next AWB", author = "A-10839")
+	public void getNextAWB1() throws Exception {
+
+		String[] tagName1 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue1 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("findNext.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(nextAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String document_number1 = sp1.getNodeValueFromJsonResponse(response1, "document_number");
+		TestData.setInterimData(className, "document_number1", document_number1);
+		Thread.sleep(2000);
+		
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 13)
+	@IRaftTest(testCaseID = "TC_QF_13", testDesc = "Create operational flight details", author = "A-10839")
+	public void createOperationalFlight1() throws Exception {
+
+		String fltNo2 = BizUtility.createFlightNumWithRange(1000, 2999);
+		TestData.setInterimData(className, "fltNo2", fltNo2);
+		String fullFlightnum2 = gData("CARRIER_CODE") + fltNo2;
+		TestData.setInterimData(className, "fullFlightnum2", fullFlightnum2);
+		TestData.setInterimData(className, "fltNo1_date2", BasePage.getDate(0, "dd-MMM-YYYY"));
+		int time1Hr = BasePage.getCurrentTimeHr(5, 30, 0);
+		int time1Min = BasePage.getCurrentTimeMin(4, 00, 0);
+		String time1HH = (time1Hr + "").length() >= 2 ? (time1Hr + "") : "0" + time1Hr;
+		String time1MIN = (time1Min + "").length() >= 2 ? (time1Min + "") : "0" + time1Min;
+		System.out.println(time1HH + ":" + time1MIN + ":00");
+		TestData.setInterimData(className, "STD_TIME", time1HH + ":" + time1MIN + ":57+10:00");
+		String STD2 = BasePage.getDate(0, "YYYY-MM-dd") + "T" + iData("STD_TIME");
+		TestData.setInterimData(className, "STD2", STD2);
+
+		String[] tagName1 = { "owner", "truck_type", "offer_display", "truck_vendor", "schedule_type", "flight_number",
+				"origin", "destination", "control_office", "leg[0].STA", "leg[0].STD", "leg[0].departure_position",
+				"leg[0].origin", "leg[0].aircraft", "leg[0].destination", "leg[0].departure_gate", "leg[0].ATA",
+				"leg[0].operating_reference[0].flight_number", "leg[0].operating_reference[0].carrier_code",
+				"leg[0].ATD", "leg[0].departure_terminal", "leg[0].service_type", "leg[0].ETA", "leg[0].ETD",
+				"leg[0].nonoperating_reference[0].flight_number", "leg[0].nonoperating_reference[0].carrier_code",
+				"leg[0].tail_number", "leg[0].arrival_position", "leg[0].aircraft_owner", "leg[0].arrival_gate",
+				"leg[0].arrival_terminal", "control_stations", "route", "flight_date", "flight_type", "domestic_flight",
+				"remarks", "carrier_code", "status", };
+
+		Object[] tagValue1 = { "QF", "FLTBED", true, "DHLSYD", "Own", fltNo2, "SYD", "LAX", "SYD",
+				iData("STD2").split("T")[0] + "T16:39:57+10:00", iData("STD2").split("T")[0] + "T09:13:57+10:00", "T3",
+				"SYD", "762", "LAX", "BAY1", iData("STD2").split("T")[0] + "T16:39:57+10:00", fltNo2, "QF",
+				iData("STD2").split("T")[0] + "T13:30:57+10:00", "T1", "J",
+				iData("STD2").split("T")[0] + "T16:39:57+10:00", iData("STD2").split("T")[0] + "T13:30:57+10:00",
+				fltNo2, "QF", "ZKFXL", "F1", "QF", "BAY3", "T3", "SYD", "SYD-LAX", iData("STD2").split("T")[0],
+				"Combination", false, "Flight remarks", "QF", "Active", };
+
+		String endPoint1 = "/icargo-api/qf/enterprise/v1/flights/" + fullFlightnum2 + "-" + iData("fltNo1_date2");
+
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("saveFlight.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(endPoint1, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+
+// Capture booking details of a shipment
+
+	@Test(enabled = true, groups = { "QF" }, priority = 14)
+	@IRaftTest(testCaseID = "TC_QF_14", testDesc = "Capture booking details of a shipmnet", author = "A-10839")
+	public void captureBooking() throws Exception {
+		TestData.setInterimData(className,"fltNo2","1919");
+		TestData.setInterimData(className,"STD2","2025-05-30T16:50:57+10:00");
+		TestData.setInterimData(className,"document_number1","081-00003080");
+		TestData.setInterimData(className,"sessionId","eyJjdHkiOiJhcHBsaWNhdGlvbi9qc29uIiwiYWxnIjoiSFMyNTYifQ.ewogICJvd25fYWlybGluZV9jb2RlIiA6ICJRRiIsCiAgIm93bl9zYWxlc191c2VyIiA6IHRydWUsCiAgImNvbXBhbnktY29kZSIgOiAiUUYiLAogICJzdGF0aW9uX2NvZGUiIDogIlNZRCIsCiAgImxhbmd1YWdlIiA6ICJlbi1VUyIsCiAgImRlZmF1bHRfd2FyZWhvdXNlX2NvZGUiIDogIlNZRFdIMDEiLAogICJwcm9maWxlX2lkZW50aXR5IiA6ICJHRU5FUklDX1VTRVIiLAogICJyb2xlX2dyb3VwX2NvZGUiIDogIklDQVJHT1NVUFAiLAogICJnaGFfdXNlciIgOiB0cnVlLAogICJpY2FyZ29fdG9rZW4iIDogImV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5ld29nSUNKamIzVnVkSEo1SWlBNklHNTFiR3dzQ2lBZ0ltOTNibDloYVhKc2FXNWxYMk52WkdVaUlEb2dJbEZHSWl3S0lDQWliM2R1WDNOaGJHVnpYM1Z6WlhJaUlEb2dkSEoxWlN3S0lDQWlZV2x5Y0c5eWRGOWpiMlJsSWlBNklDSlRXVVFpTEFvZ0lDSmhhWEpzYVc1bFgzVnpaWElpSURvZ1ptRnNjMlVzQ2lBZ0lteGhjM1JmYm1GdFpTSWdPaUJ1ZFd4c0xBb2dJQ0pqYjIxd1lXNTVMV052WkdVaUlEb2dJbEZHSWl3S0lDQWlkR2x0WlZwdmJtVWlJRG9nSWtGMWMzUnlZV3hwWVM5VGVXUnVaWGtpTEFvZ0lDSnpkR0YwYVc5dVgyTnZaR1VpSURvZ0lsTlpSQ0lzQ2lBZ0lteGhibWQxWVdkbElpQTZJRzUxYkd3c0NpQWdJbVJsWm1GMWJIUmZkMkZ5WldodmRYTmxYMk52WkdVaUlEb2dJbE5aUkZkSU1ERWlMQW9nSUNKd2NtOW1hV3hsWDJsa1pXNTBhWFI1SWlBNklDSkhSVTVGVWtsRFgxVlRSVklpTEFvZ0lDSnliMnhsWDJkeWIzVndYMk52WkdVaUlEb2dJa2xEUVZKSFQxTlZVRkFpTEFvZ0lDSm5hR0ZmZFhObGNpSWdPaUIwY25WbExBb2dJQ0p2ZEdobGNsOXpZV3hsYzE5MWMyVnlJaUE2SUdaaGJITmxMQW9nSUNKMWMyVnlYMmxrSWlBNklDSkpRMDlCUkUxSlRpSXNDaUFnSW1sallYSm5iMTkwYjJ0bGJpSWdPaUFpWVZkT1ZGcFlUbnBoVnpsMVUxZFJObEpVVmxwVk1sb3pWbTV3TlZreWEzZE9SMnd3V2toYVdGUllSbmRYUkZwRFVWVk9VMDlZUW5ObGFWVjVVVzVLU1ZKdVNqRmtNbk16VkVjMWExSXdNVVpVTTFwSFVXNVdXbUV6Um1GWFdIQmFVMVp3TlZwcmR6QlRWRUp5VWtkdmVWSnJjRzFVUmtWNVNsUkNRbFF3TVVKWk1VWk1ZbXhvZEZGVFZYcFNRMVY2VWtFOVBTSXNDaUFnSW14dloybHVYM1JwYldVaUlEb2dJakl3TWpVdE1EWXRNVE5VTVRVNk5EQTZNellpTEFvZ0lDSmtZWFJoYzI5MWNtTmxYM1I1Y0dVaUlEb2dJazVQVWlJc0NpQWdJbTkzYmw5aGFYSnNhVzVsWDJsa1pXNTBhV1pwWlhJaUlEb2dNVEE0TVN3S0lDQWlaR1ZtWVhWc2RGOXZabVpwWTJWZlkyOWtaU0lnT2lBaVUxbEVJaXdLSUNBaVpYaHdJaUE2SURFM05EazRNelkwTXpZMk9URXNDaUFnSW1acGNuTjBYMjVoYldVaUlEb2dJa2xEVDBGRVRVbE9JaXdLSUNBaVpYaHdhWEo1WDJSaGRHVmZkR2x0WlNJZ09pQWlNakF5TlMwd05pMHhNMVF4TnpvME1Eb3pOaTQyT1RGYUlncDkuYUFnU3hIbTlDT05GTHBiQlJpSXotbjh4alBKS2h0dkpONWdMVVB0QWNlYyIsCiAgImRhdGFzb3VyY2VfdHlwZSIgOiAiTk9SIiwKICAiZGVmYXVsdF9vZmZpY2VfY29kZSIgOiAiU1lEIiwKICAiZXhwIiA6IDE3NDk4MjkyMzYsCiAgImZpcnN0X25hbWUiIDogIklDT0FETUlOIiwKICAiYWlycG9ydF9jb2RlIiA6ICJTWUQiLAogICJvd25fYWlybGluZV9udW1lcmljX2NvZGUiIDogIjA4MSIsCiAgImFpcmxpbmVfdXNlciIgOiBmYWxzZSwKICAiZW52IiA6IFsgIktFWXpwbGJTMndrM0pQTU9RdTJwUjUrZHc9PSIgXSwKICAidXNlcl90aW1lem9uZSIgOiAiQXVzdHJhbGlhL1N5ZG5leSIsCiAgIm90aGVyX3NhbGVzX3VzZXIiIDogZmFsc2UsCiAgInVzZXJfaWQiIDogIklDT0FETUlOIiwKICAibG9naW5fdGltZSIgOiAiMjAyNS0wNi0xM1QxNTo0MDozNiIsCiAgIm93bl9haXJsaW5lX2lkZW50aWZpZXIiIDogMTA4MSwKICAiZXhwaXJ5X2RhdGVfdGltZSIgOiAiMjAyNS0wNi0xM1QxNTo0MDozNi42OTQyODlaIgp9.nN-k3qWTqCNBvDF227_ac5urFDJ-ifbvkS3jgDfLHH4");
+		String[] tagName = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date", "flights[0].departure_airport",
+				"flights[0].arrival_airport" };
+		String[] tagValue = { iData("document_number1"), lData("ORIGIN"), lData("DESTINATION"),
+				iData("STD2").split("T")[0], lData("AGENT_BOOK"), lData("SCC"), lData("SCC"), gData("COMPANY_CODE"),
+				iData("fltNo2"), iData("STD2").split("T")[0], lData("ORIGIN"), lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("document_number1");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("normalBookingNeo.json", tagName, tagValue);
+
+		Response resp = sp.sendRESTPOSTRequest(endPoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json");
+		JSONObject responsejson = sp.returnJSONObjectFromResponse(resp);
+
+		String awb = sp.getNodeValueFromJsonResponse(responsejson, "awb");
+
+		System.out.println("AWB number:" + awb);
+		TestData.setInterimData(className, "awbNo_Bookedshpmt", awb);
+		String status = sp.getNodeValueFromJsonResponse(responsejson, "booking_status");
+		/*Assert.assertTrue("CFM", status.contains("CFM"));*/
+
+	}
+
+//Update booking details of a shipment
+	/*@Test(enabled = true, groups = { "QF" }, priority = 15)
+	@IRaftTest(testCaseID = "TC_QF_15", testDesc = "Update booking details of a shipment", author = "A-10839")
+	public void updateBooking() throws Exception {
+		String[] tagName = { "awb", "origin", "destination", "shipping_date", "agent_code", "product",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date", "flights[0].departure_airport",
+				"flights[0].arrival_airport" };
+		String[] tagValue = { iData("document_number1"), lData("ORIGIN"), lData("DESTINATION"),
+				iData("STD2").split("T")[0], lData("AGENT_BOOK"), lData("PRODUCT"), lData("SCC"), lData("SCC"),
+				gData("COMPANY_CODE"), iData("fltNo2"), iData("STD2").split("T")[0], lData("ORIGIN"),
+				lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("document_number1");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("normalBookingNeo.json", tagName, tagValue);
+		logger.info(requestjson);
+		Response resp = sp.sendRESTPOSTRequest(endPoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json");
+		JSONObject responsejson = sp.returnJSONObjectFromResponse(resp);
+
+		String awb = sp.getNodeValueFromJsonResponse(responsejson, "awb");
+		System.out.println("AWB number:" + awb);
+		TestData.setInterimData(className, "awbNo_Bookedshpmt", awb);
+		String status = sp.getNodeValueFromJsonResponse(responsejson, "booking_status");
+		Assert.assertTrue("CFM", status.contains("CFM"));
+
+	}
+
+//Find the booking details for a shipment
+	@Test(enabled = true, groups = { "QF" }, priority = 16)
+	@IRaftTest(testCaseID = "TC_QF_16", testDesc = "Find the booking details for a shipment", author = "A-10839")
+	public void getBookingDetails() throws Exception {
+
+		String getBooking_endpoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("document_number1");
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(getBooking_endpoint, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String awb1 = sp1.getNodeValueFromJsonResponse(response1, "awb");
+		TestData.setInterimData(className, "awb1", awb1);
+
+		String destination1 = sp1.getNodeValueFromJsonResponse(response1, "destination");
+		TestData.setInterimData(className, "destination1", destination1);
+
+		Assert.assertEquals("awb - Verified", iData("document_number1"), iData("awb1"));
+		Assert.assertEquals("destination - Verified", lData("DESTINATION"), iData("destination1"));
+	}
+
+//AWB API
+//Capture CSD information for an AWB with RACA
+	@Test(enabled = true, groups = { "QF" }, priority = 17)
+	@IRaftTest(testCaseID = "TC_QF_17", testDesc = "Get Next AWB", author = "A-10839")
+	public void getNextAWB0() throws Exception {
+
+		String[] tagName1 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue1 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("findNext.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(nextAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String document_number0 = sp1.getNodeValueFromJsonResponse(response1, "document_number");
+		TestData.setInterimData(className, "document_number0", document_number0);
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 18)
+	@IRaftTest(testCaseID = "TC_QF_18", testDesc = "Capture booking details of a shipmnet", author = "A-10839")
+	public void captureBooking0() throws Exception {
+
+		String[] tagName = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date", "flights[0].departure_airport",
+				"flights[0].arrival_airport" };
+		String[] tagValue = { iData("document_number0"), lData("ORIGIN"), lData("DESTINATION"),
+				iData("STD2").split("T")[0], lData("AGENT_BOOK"), lData("SCC"), lData("SCC"), gData("COMPANY_CODE"),
+				iData("fltNo2"), iData("STD2").split("T")[0], lData("ORIGIN"), lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("document_number0");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("normalBookingNeo.json", tagName, tagValue);
+
+		Response resp = sp.sendRESTPOSTRequest(endPoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson = sp.returnJSONObjectFromResponse(resp);
+
+		String awb0 = sp.getNodeValueFromJsonResponse(responsejson, "awb");
+
+		System.out.println("AWB number:" + awb0);
+		TestData.setInterimData(className, "awbNo_Bookedshpmt0", awb0);
+		String status = sp.getNodeValueFromJsonResponse(responsejson, "booking_status");
+		Assert.assertTrue("CFM", status.contains("CFM"));
+
+	}
+
+//Capture AWB Notes information
+	@Test(enabled = true, groups = { "QF" }, priority = 19)
+	@IRaftTest(testCaseID = "TC_QF_19", testDesc = "Capture AWB Notes information", author = "A-10839")
+	public void captureAWBNotes() throws Exception {
+
+		String[] tagName = { "operation", "remarks" };
+		String[] tagValues = { "BREAKDOWN", "AWB not breakdown due to missing document pouch" };
+
+		String note_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("document_number1") + "/notes";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("AWBNotes.json", tagName, tagValues);
+		logger.info(requestjson);
+		Response resp = sp.sendRESTPOSTRequest(note_endpoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("awb notes captured successfully"),
+				"AWB Notes captured successfully");
+
+	}
+
+//List AWB Notes information
+	@Test(enabled = true, groups = { "QF" }, priority = 20)
+	@IRaftTest(testCaseID = "TC_QF_20", testDesc = "List AWB Notes information", author = "A-10839")
+	public void listAWBNotes() throws Exception {
+
+		String listAWB_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("document_number1") + "/notes";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(listAWB_endpoint, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONArray responseArray = new JSONArray(resp1.asString());
+		JSONObject respJson = responseArray.getJSONObject(0);
+
+		String operation = sp1.getNodeValueFromJsonResponse(respJson, "operation");
+		System.out.println("operation:" + operation);
+		TestData.setInterimData(className, "operation", operation);
+		String remarks = sp1.getNodeValueFromJsonResponse(respJson, "remarks");
+
+		System.out.println("remarks:" + remarks);
+		TestData.setInterimData(className, "remarks", remarks);
+
+		Assert.assertTrue("BREAKDOWN", operation.contains("BREAKDOWN"));
+
+	}
+//Capture AWB details for GEN shipments
+
+	@Test(enabled = true, groups = { "QF" }, priority = 21)
+	@IRaftTest(testCaseID = "TC_QF_21", testDesc = "Capture AWB details for GEN shipments", author = "A-10839")
+	public void captureAWBDetailsGen() throws Exception {
+
+		String[] tagName = { "routing[0].carrier", "routing[0].destination", "handling_codes", "agent.agent_code",
+				"origin", "destination", "applicable_charges.rating_details[0].commodity",
+				"applicable_charges.rating_details[0].nature_of_goods", "date_of_journey", "shipment_description",
+				"awb", "requested_flight[0].flight_date", "requested_flight[0].flight_number",
+				"requested_flight[0].carrier_code" };
+		Object[] tagValues = { gData("CARRIER_CODE"), lData("DESTINATION"), "[\"" + lData("SCC") + "\"]",
+				lData("AGENT"), lData("ORIGIN"), lData("DESTINATION"), lData("SCC"), lData("SHIPPER_DESCGEN"),
+				iData("STD2").split("T")[0], lData("SHIPPER_DESCGEN"), iData("document_number1"),
+				iData("STD2").split("T")[0], iData("fltNo2"), gData("CARRIER_CODE") };
+
+		String gen_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("document_number1");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJsonwithJsonArray("captureAwbGen.json", tagName, tagValues);
+
+		Response resp = sp.sendRESTPOSTRequest(gen_endpoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("awb data saved successfully"),
+				"AWB data Saved successfully");
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 22)
+	@IRaftTest(testCaseID = "TC_QF_22", testDesc = "Get Next AWB", author = "A-10839")
+	public void getNextAWB2() throws Exception {
+
+		String[] tagName1 = { "agent", "document_owner", "document_type", "document_subtype" };
+		String[] tagValue1 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJson("findNext.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(nextAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String document_number2 = sp1.getNodeValueFromJsonResponse(response1, "document_number");
+		TestData.setInterimData(className, "document_number2", document_number2);
+
+	}
+
+//Capture AWB details for AVI shipments
+	@Test(enabled = true, groups = { "QF" }, priority = 23)
+	@IRaftTest(testCaseID = "TC_QF_23", testDesc = "Capture AWB details for AVI shipments", author = "A-10839")
+	public void captureAWBDetailsAVI() throws Exception {
+
+		String[] tagName = { "routing[0].carrier", "routing[0].destination", "handling_codes", "agent.agent_code",
+				"origin", "destination", "applicable_charges.rating_details[0].commodity",
+				"applicable_charges.rating_details[0].nature_of_goods", "date_of_journey", "shipment_description",
+				"awb", "requested_flight[0].flight_date", "requested_flight[0].flight_number",
+				"requested_flight[0].carrier_code" };
+		Object[] tagValues = { gData("CARRIER_CODE"), lData("DESTINATION"), "[\"" + lData("SCC_AVI") + "\"]",
+				lData("AGENT"), lData("ORIGIN"), lData("DESTINATION"), lData("SCC_AVI"), lData("SHIPPER_DESC"),
+				iData("STD2").split("T")[0], lData("SHIPPER_DESC"), iData("document_number2"),
+				iData("STD2").split("T")[0], iData("fltNo2"), gData("CARRIER_CODE") };
+
+		String avi_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("document_number2");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJsonwithJsonArray("captureAwbGen.json", tagName, tagValues);
+
+		Response resp = sp.sendRESTPOSTRequest(avi_endpoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("awb data saved successfully"),
+				"AWB data Saved successfully");
+
+	}
+
+//Capture AWB details for DG/SL shipments
+
+	@Test(enabled = true, groups = { "QF" }, priority = 24)
+	@IRaftTest(testCaseID = "TC_QF_24", testDesc = "Capture AWB details for DG/SL shipments", author = "A-10839")
+	public void captureAWBDetailsDG() throws Exception {
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName = { "special_handling_code", "shipping_name" };
+		String[] tagValues = { lData("SCC_DG"), lData("SHIPPING_NAME") };
+
+		String dg_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("document_number2")
+				+ "/dangerous-goods-information";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("captureAwbDg.json", tagName, tagValues);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(dg_endpoint).then().statusCode(200).and().log().all()
+				.extract().response();
+
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+
+	// Retrieve AWB DG information
+	@Test(enabled = true, groups = { "QF" }, priority = 25)
+	@IRaftTest(testCaseID = "TC_QF_25", testDesc = "Retrieve AWB DG information", author = "A-10839")
+	public void retrieveAWBDG() throws Exception {
+		String retrieveAWBDG = "/icargo-api/qf/enterprise/v2/awbs/" + iData("document_number2")
+				+ "/dangerous-goods-declaration";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(retrieveAWBDG, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String SHPName = sp1.getNodeValueFromJsonResponse(response1, "line_item_details[0].shipping_name");
+		System.out.println("SHPName:" + SHPName);
+		TestData.setInterimData(className, "SHPName", SHPName);
+		String SPH = sp1.getNodeValueFromJsonResponse(response1, "line_item_details[0].special_handling_codes");
+
+		System.out.println("SPH:" + SPH);
+		TestData.setInterimData(className, "SPH", SPH);
+		Assert.assertTrue(lData("SHIPPING_NAME"), SHPName.contains("Dry ice"));
+		Assert.assertTrue(lData("SCC_DG"), SPH.contains("ICE"));
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 26)
+	@IRaftTest(testCaseID = "TC_QF_26", testDesc = "Capture CSD information for an AWB with RACA", author = "A-10839")
+	public void captureCSDInformation() throws Exception {
+
+		String[] tagName = { "security_status", "screening_time" };
+		String[] tagValues = { "SPX", iData("STD2").split("T")[0] + "T10:00:28+08:00" };
+
+		String csd_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("awbNo_Bookedshpmt0")
+				+ "/securitydeclaration";
+		TestData.setInterimData(className, "csd_endpoint", csd_endpoint);
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureCSD.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(csd_endpoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("security declaration updated successfully"),
+				"Security Declaration updated successfully");
+
+	}
+//List CSD information for an AWB
+
+	@Test(enabled = true, groups = { "QF" }, priority = 27)
+	@IRaftTest(testCaseID = "TC_QF_27", testDesc = "List CSD information for an AWB", author = "A-10839")
+	public void retrieveListCSD() throws Exception {
+
+		String retrieveListCSD = "/icargo-api/qf/enterprise/v2/awbs/" + iData("awbNo_Bookedshpmt0")
+				+ "/securitydeclaration";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(retrieveListCSD, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String Security_Status = sp1.getNodeValueFromJsonResponse(response1, "security_status");
+		System.out.println("Security_Status:" + Security_Status);
+		TestData.setInterimData(className, "Security_Status", Security_Status);
+
+		Assert.assertTrue(lData("SECURITY_STATUS"), Security_Status.contains("SPX"));
+
+	}
+
+//List AWB details
+
+	@Test(enabled = true, groups = { "QF" }, priority = 28)
+	@IRaftTest(testCaseID = "TC_QF_28", testDesc = "List AWB details", author = "A-10839")
+	public void listAWBDetails() throws Exception {
+
+		String listAWBDetails = "/icargo-api/qf/enterprise/v2/awbs/" + iData("document_number0");
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(listAWBDetails, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String ORIGIN = sp1.getNodeValueFromJsonResponse(response1, "origin");
+		System.out.println("ORIGIN:" + ORIGIN);
+		TestData.setInterimData(className, "ORIGIN", ORIGIN);
+		String AWB = sp1.getNodeValueFromJsonResponse(response1, "awb");
+		System.out.println("AWB:" + AWB);
+		TestData.setInterimData(className, "AWB", AWB);
+		Assert.assertEquals("AWB - Verified", AWB, iData("document_number0"));
+		Assert.assertEquals("ORIGIN - Verified", ORIGIN, lData("ORIGIN"));
+	}
+
+//Delete AWB details
+	@Test(enabled = true, groups = { "QF" }, priority = 29)
+	@IRaftTest(testCaseID = "TC_QF_29", testDesc = "Delete AWB details", author = "A-10839")
+	public void deleteAWBDetails() throws Exception {
+
+		String CANCEL_ENDPOINT = lData("NEO_URL") + "/icargo-api/qf/enterprise/v2/awbs/" + iData("document_number2");
+		APIUtil api = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		Response resp = api.sendRESTDELETERequest(CANCEL_ENDPOINT, "Content-Type", "application/json", "x-api-key",
+				lData("API_KEY"), "ICO-Authorization", iData("sessionId"));
+
+	}
+
+//Build up planning API
+
+//Allocate task in build up planning
+	@Test(enabled = true, groups = { "QF" }, priority = 30)
+	@IRaftTest(testCaseID = "TC_QF_30", testDesc = "Allocate task in build up planning", author = "A-10839")
+	public void allocateTaskBuildPlanning() throws Exception {
+
+		String[] tagName = { "awb", "remarks" };
+		String[] tagValues = { iData("document_number0"), lData("REMARKS") };
+
+		String allocate_task = "/icargo-api/qf/enterprise/v1/planning/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/allocations/Task 1/awbs/"
+				+ iData("document_number0");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("allocateTask.json", tagName, tagValues);
+		logger.info(requestjson);
+		Response resp = sp.sendRESTPOSTRequest(allocate_task, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		
+		 * BasePage.Assert.assertTrue(resp.asString().toLowerCase().
+		 * contains("successful operation"), "successful operation");
+		 
+
+	}
+
+//Retrive AWB ready status
+	@Test(enabled = true, groups = { "QF" }, priority = 31)
+	@IRaftTest(testCaseID = "TC_QF_31", testDesc = "Retrive AWB ready status", author = "A-10839")
+	public void retriveAWBReadyStatus() throws Exception {
+
+		String listAWBStatus = "/icargo-api/qf/enterprise/v1/planning/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/awbs/"
+				+ iData("document_number0") + "/status";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(listAWBStatus, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String STATUS = sp1.getNodeValueFromJsonResponse(response1, "status");
+		System.out.println("STATUS:" + STATUS);
+		TestData.setInterimData(className, "STATUS", STATUS);
+		String AWB = sp1.getNodeValueFromJsonResponse(response1, "awb");
+
+		System.out.println("AWB:" + AWB);
+		TestData.setInterimData(className, "AWB", AWB);
+		Assert.assertEquals("AWB - Verified", AWB, iData("document_number0"));
+		Assert.assertEquals("SATUS - Verified", STATUS, lData("STATUS"));
+	}
+// Retrive build up planning
+
+	@Test(enabled = true, groups = { "QF" }, priority = 32)
+	@IRaftTest(testCaseID = "TC_QF_32", testDesc = "Retrive build up planning", author = "A-10839")
+	public void retriveBuildPlanning() throws Exception {
+
+		String listBuildPlanning = "/icargo-api/qf/enterprise/v1/planning/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT");
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(listBuildPlanning, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String AIRPORT = sp1.getNodeValueFromJsonResponse(response1, "airport");
+		System.out.println("AIRPORT:" + AIRPORT);
+		TestData.setInterimData(className, "AIRPORT", AIRPORT);
+		String Flight = sp1.getNodeValueFromJsonResponse(response1, "flight");
+
+		System.out.println("flight:" + Flight);
+
+		Assert.assertEquals("Airport - Verified", AIRPORT, lData("ORIGIN"));
+		Assert.assertEquals("Flight - Verified", Flight,
+				gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT"));
+	}
+//Un assign task
+
+	@Test(enabled = false, groups = { "QF" }, priority = 33)
+	@IRaftTest(testCaseID = "TC_QF_33", testDesc = "Un assign task", author = "A-10839")
+	public void unAssignTask() throws Exception {
+		String[] tagName = { "awb", "remarks" };
+		String[] tagValues = { iData("document_number0"), lData("REMARKS") };
+
+		String allocate_task = "/icargo-api/qf/enterprise/v1/planning/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/allocations/Task 1/awbs/"
+				+ iData("document_number0") + "/unassign";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("allocateTask.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(allocate_task, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("successful operation"),
+				"successful operation");
+
+	}
+
+// Mark allocation completed
+	@Test(enabled = false, groups = { "QF" }, priority = 34)
+	@IRaftTest(testCaseID = "TC_QF_34", testDesc = "Mark allocation", author = "A-10839")
+	public void markAllocation() throws Exception {
+		RestAssured.baseURI = lData("NEO_URL");
+		String markAllocation = "/icargo-api/qf/enterprise/v1/planning/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/allocations/Task 1"
+				+ "/complete";
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response res = RestAssured.given().contentType("text/plain; charset=utf-8").header("Content-Type", "text/plain")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("Buildup completed").when().post(markAllocation).then().statusCode(200).and().log().all()
+				.extract().response();
+		logger.info(res);
+
+	}
+
+	// Acceptance API
+
+//Capture acceptance in both ULD and loose
+
+	@Test(enabled = true, groups = { "QF" }, priority = 35)
+	@IRaftTest(testCaseID = "TC_QF_35", testDesc = "Capture acceptance in both ULD and loose", author = "A-10839")
+	public void captureAcceptanceULDLoose() throws Exception {
+		TestData.setInterimData(className, "AWBNO1", iData("document_number0").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("AWBNO1"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").executeAWB().verifyAWBOnExecute("", className)
+				.getAWBStatus("Executed").close();
+		String[] tagName = { "acceptance_details[0].pieces", "acceptance_details[0].weight" };
+		String[] tagValues = { lData("PIECES"), lData("WEIGHT") };
+
+		String captureAcceptance = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("document_number0");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("acceptance.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureAcceptance, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+
+	}
+
+//Retrive AWB acceptance details
+	@Test(enabled = true, groups = { "QF" }, priority = 36)
+	@IRaftTest(testCaseID = "TC_QF_36", testDesc = "Retrive AWB acceptance details", author = "A-10839")
+	public void retriveAWBaAcceptance() throws Exception {
+		String retriveAWBaAcceptance = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("document_number0");
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(retriveAWBaAcceptance, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String PIECES = sp1.getNodeValueFromJsonResponse(response1, "acceptance_details[0].pieces");
+		System.out.println("PIECES:" + PIECES);
+		TestData.setInterimData(className, "PIECES", PIECES);
+		String WEIGHT = sp1.getNodeValueFromJsonResponse(response1, "acceptance_details[0].weight");
+		System.out.println("WEIGHT:" + WEIGHT);
+		Assert.assertEquals("PIECES - Verified", PIECES, lData("PIECES"));
+		Assert.assertEquals("WEIGHT - Verified", WEIGHT, lData("WEIGHT") + ".0");
+	}
+
+//Capture check weight information of an AWB
+	@Test(enabled = true, groups = { "QF" }, priority = 37)
+	@IRaftTest(testCaseID = "TC_QF_37", testDesc = "Capture check weight information of an AWB", author = "A-10839")
+	public void captureWeight() throws Exception {
+		String[] tagName = { "pieces", "weight" };
+		String[] tagValues = { lData("PIECES"), lData("WEIGHT1") };
+
+		String captureWeight = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("document_number0") + "/weigh";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("acceptance.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureWeight, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("weight update successful"),
+				"Weight update successful");
+
+	}
+//Capture ULD actual weight
+
+	@Test(enabled = true, groups = { "QF" }, priority = 39)
+	@IRaftTest(testCaseID = "TC_QF_42", testDesc = "Capture ULD actual weight", author = "A-10839")
+	public void captureULDWeight() throws Exception {
+		String[] tagName = { "weight" };
+		String[] tagValues = { lData("WEIGHTULD") };
+		String captureULDWeight = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/ulds/"
+				+ iData("uldno") + "/actualweight";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureULDWeight.json", tagName, tagValues);
+		logger.info(requestjson);
+		Response resp = sp.sendRESTPOSTRequest(captureULDWeight, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject response1 = sp.returnJSONObjectFromResponse(resp);
+		String WEIGHT = sp.getNodeValueFromJsonResponse(response1, "weight");
+		System.out.println("WEIGHT:" + WEIGHT);
+		TestData.setInterimData(className, "WEIGHT", WEIGHT);
+		String WTSTATUS = sp.getNodeValueFromJsonResponse(response1, "weight_status");
+
+		System.out.println("WTSTATUS:" + WTSTATUS);
+		TestData.setInterimData(className, "WTSTATUS", WTSTATUS);
+		Assert.assertEquals("WEIGHT - Verified", WEIGHT, lData("WEIGHTULD") + ".0");
+		Assert.assertEquals("WTSTATUS - Verified", WTSTATUS, lData("WTSTATUS"));
+
+	}
+
+//Build Up API
+//ULD build up
+	@Test(enabled = true, groups = { "QF" }, priority = 38)
+	@IRaftTest(testCaseID = "TC_QF_38", testDesc = "ULD build up", author = "A-10839")
+	public void uLDBuildUp() throws Exception {
+
+		String uldno = BizUtility.createULDNum(lData("ULDTYPE"), lData("OAL"));
+		TestData.setInterimData(className, "uldno", uldno);
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String uLDBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldBuildup.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(uLDBuildUp, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+
+	}
+
+//Capture ID details
+	@Test(enabled = true, groups = { "QF" }, priority = 40)
+	@IRaftTest(testCaseID = "TC_QF_40", testDesc = "Capture ID details", author = "A-10839")
+	public void captureIDDetails() throws Exception {
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName = { "verification_status" };
+		String[] tagValues = { lData("VERSTATUS") };
+
+		String captureID = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("document_number0") + "/driver-identification";
+		;
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("captureId.json", tagName, tagValues);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(captureID).then().statusCode(200).and().log().all()
+				.extract().response();
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("driver identification update successful"),
+				"Driver identification update successful");
+	}
+
+//Retrieve ULD weight from the weighscale log
+	@Test(enabled = true, groups = { "QF" }, priority = 41)
+	@IRaftTest(testCaseID = "TC_QF_41", testDesc = "Retrieve ULD weight from the weighscale log", author = "A-10839")
+	public void retriveUldWeight() throws Exception {
+
+		String retriveUldWeight = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/ulds/"
+				+ iData("uldno") + "/actualweight";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(retriveUldWeight, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String WEIGHT = sp1.getNodeValueFromJsonResponse(response1, "weight");
+		System.out.println("WEIGHT:" + WEIGHT);
+		TestData.setInterimData(className, "WEIGHT", WEIGHT);
+		String WT_STATUS = sp1.getNodeValueFromJsonResponse(response1, "weight_status");
+		System.out.println("WT_STATUS:" + WT_STATUS);
+
+		Assert.assertEquals("WEIGHT - Verified", WEIGHT, lData("WEIGHTULD") + ".0");
+		Assert.assertEquals("WEIGHT_STATUS - Verified", WT_STATUS, lData("WTSTATUS"));
+	}
+
+//Update ULD build up
+	@Test(enabled = true, groups = { "QF" }, priority = 42)
+	@IRaftTest(testCaseID = "TC_QF_42", testDesc = "Update ULD build up", author = "A-10839")
+	public void updateULDBuildUp() throws Exception {
+
+		String[] tagName = { "destination" };
+		String[] tagValues = { lData("DESTINATION") };
+		String updateULDBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno")
+				+ "/update";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("updateUldBuild.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(updateULDBuildUp, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+
+//AWB build up
+	@Test(enabled = true, groups = { "QF" }, priority = 43)
+	@IRaftTest(testCaseID = "TC_QF_43", testDesc = "Get Next AWB", author = "A-10839")
+	public void getNextAWB3() throws Exception {
+
+		String[] tagName1 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue1 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("findNext.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(nextAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String document_number3 = sp1.getNodeValueFromJsonResponse(response1, "document_number");
+		TestData.setInterimData(className, "document_number3", document_number3);
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 44)
+	@IRaftTest(testCaseID = "TC_QF_44", testDesc = "Capture booking details of a shipmnet", author = "A-10839")
+	public void captureBooking3() throws Exception {
+		String[] tagName = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date", "flights[0].departure_airport",
+				"flights[0].arrival_airport" };
+		String[] tagValue = { iData("document_number3"), lData("ORIGIN"), lData("DESTINATION"),
+				iData("STD2").split("T")[0], lData("AGENT_BOOK"), lData("SCC"), lData("SCC"), gData("COMPANY_CODE"),
+				iData("fltNo2"), iData("STD2").split("T")[0], lData("ORIGIN"), lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("document_number3");
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("normalBookingNeo.json", tagName, tagValue);
+
+		Response resp = sp.sendRESTPOSTRequest(endPoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson = sp.returnJSONObjectFromResponse(resp);
+		String awb3 = sp.getNodeValueFromJsonResponse(responsejson, "awb");
+		System.out.println("AWB number:" + awb3);
+		TestData.setInterimData(className, "awbNo_Bookedshpmt3", awb3);
+		String status = sp.getNodeValueFromJsonResponse(responsejson, "booking_status");
+		Assert.assertTrue("CFM", status.contains("CFM"));
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 45)
+	@IRaftTest(testCaseID = "TC_QF_45", testDesc = "Capture acceptance in both ULD and loose", author = "A-10839")
+	public void captureAcceptanceULDLoose3() throws Exception {
+		TestData.setInterimData(className, "AWBNO2", iData("document_number3").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("AWBNO2"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").executeAWB().verifyAWBOnExecute("", className)
+				.getAWBStatus("Executed").close();
+		String[] tagName = { "acceptance_details[0].pieces", "acceptance_details[0].weight", };
+		String[] tagValues = { lData("PIECES"), lData("WEIGHT") };
+
+		String captureAcceptance = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("document_number3");
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("looseAcceptance.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureAcceptance, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 46)
+	@IRaftTest(testCaseID = "TC_QF_46", testDesc = "ULD build up", author = "A-10839")
+	public void uLDBuildUp1() throws Exception {
+
+		String uldno1 = BizUtility.createULDNum(lData("ULDTYPE"), lData("OAL"));
+		TestData.setInterimData(className, "uldno1", uldno1);
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+
+		String uLDBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno1");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldBuildup.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(uLDBuildUp, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 47)
+	@IRaftTest(testCaseID = "TC_QF_47", testDesc = "AWB build up", author = "A-10839")
+	public void securityScreening() throws Exception {
+		TestData.setInterimData(className, "AWBNO2", iData("document_number3").split("-")[1]);
+		String[] screeningMethod = new String[] { lData("SCREENINGMETHOD") };
+		String[] pcs = new String[] { lData("PIECES") };
+		String[] wt = new String[] { lData("WEIGHT") };
+		String[] result = new String[] { lData("RESULT") };
+		login(gData("OPS_USERNAMENEW")).goToOPR339().listAWB(gData("AWB_PREFIX"), iData("AWBNO2"))
+				.screeningCapture(screeningMethod, pcs, wt, result, new String[] { "" }, new String[] { "" },
+						new String[] { "" })
+				.checkSecurityDataReview().screeningSave(true).listAWB(gData("AWB_PREFIX"), iData("AWBNO2")).close()
+				.goToOPR335().listAWB(gData("AWB_PREFIX"), iData("AWBNO2")).verifyAllPartsReceivedChecked()
+				.readyforcarriageCheck().acceptanceFinalizedCheck().close();
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 48)
+	@IRaftTest(testCaseID = "TC_QF_48", testDesc = "AWB build up", author = "A-10839")
+	public void aWBBuildUp() throws Exception {
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String aWBBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno1")
+				+ "/awbs/" + iData("document_number3");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("AwbBuildup.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(aWBBuildUp, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+
+	}
+
+//ULD unassign
+	@Test(enabled = true, groups = { "QF" }, priority = 49)
+	@IRaftTest(testCaseID = "TC_QF_49", testDesc = "ULD unassign", author = "A-10839")
+	public void uldUnassign() throws Exception {
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String uldUnassign = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno")
+				+ "/unassign";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldUnassign.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(uldUnassign, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("unassign successful"),
+				"Unassign successful");
+
+	}
+
+//Generate and assign barrow
+	@Test(enabled = true, groups = { "QF" }, priority = 50)
+	@IRaftTest(testCaseID = "TC_QF_50", testDesc = "Generate and assign barrow", author = "A-10839")
+	public void generateAssignBarrow() throws Exception {
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String uldUnassign = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/barrows/assign";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldUnassign.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(uldUnassign, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		JSONObject response1 = sp.returnJSONObjectFromResponse(resp);
+		String barrow = sp.getNodeValueFromJsonResponse(response1, "barrow");
+		TestData.setInterimData(className, "barrow", barrow);
+		String ORIGIN = sp.getNodeValueFromJsonResponse(response1, "point_of_lading");
+		String DEST = sp.getNodeValueFromJsonResponse(response1, "point_of_unlading");
+		Assert.assertEquals("DEST - Verified", DEST, lData("DESTINATION"));
+	}
+//Retrieve ULD/Barrow details from Dead Load weight statement
+
+	@Test(enabled = true, groups = { "QF" }, priority = 51)
+	@IRaftTest(testCaseID = "TC_QF_51", testDesc = "Retrieve ULD/Barrow details from Dead Load weight statement", author = "A-10839")
+	public void retriveUldDeadLoad() throws Exception {
+
+		String retriveUldDeadLoad = "/icargo-api/qf/enterprise/v1/deadloads/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT");
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(retriveUldDeadLoad, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String ULD = sp1.getNodeValueFromJsonResponse(response1, "dws_units[0].uld");
+		System.out.println("ULD:" + ULD);
+		String Flight = sp1.getNodeValueFromJsonResponse(response1, "flight");
+		System.out.println("Flight:" + Flight);
+		Assert.assertEquals("ULD - Verified", ULD, iData("uldno1"));
+		Assert.assertEquals("Flight - Verified", Flight,
+				gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT"));
+	}
+
+//Pallet stack API
+//Capture pallet stack
+	@Test(enabled = true, groups = { "QF" }, priority = 52)
+	@IRaftTest(testCaseID = "TC_QF_52", testDesc = "Capture pallet stack", author = "A-10839")
+	public void capturePalletStack() throws Exception {
+		String[] tagName = { "point_of_unlading", "destination" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String capturePalletStack = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/palletstacks/"
+				+ "PMC89825AY"  iData("uldpallet")  ;
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("palletStock.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(capturePalletStack, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("buildup sucessfully"),
+				"Buildup sucessfully");
+
+	}
+//List pallet stack
+
+	@Test(enabled = true, groups = { "QF" }, priority = 53)
+	@IRaftTest(testCaseID = "TC_QF_53", testDesc = "List pallet stack", author = "A-10839")
+	public void listPalletStack() throws Exception {
+
+		String listPalletStack = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/palletstacks/"
+				+ "PMC89825AY" iData("uldno1") ;
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(listPalletStack, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String UNLOADING = sp1.getNodeValueFromJsonResponse(response1, "point_of_unlading");
+		System.out.println("UNLOADING:" + UNLOADING);
+		String DESTINATION = sp1.getNodeValueFromJsonResponse(response1, "destination");
+		System.out.println("DESTINATION:" + DESTINATION);
+		String REMARKS_PALLET = sp1.getNodeValueFromJsonResponse(response1, "remarks");
+		Assert.assertEquals("UNLOADING- Verified", UNLOADING, lData("ORIGIN"));
+		Assert.assertEquals("DESTINATION - Verified", DESTINATION, lData("DESTINATION"));
+		Assert.assertEquals("REMARKS_PALLET - Verified", REMARKS_PALLET, lData("REMARKS_PALLET"));
+
+	}
+
+//Find lying list pallet stack
+	@Test(enabled = true, groups = { "QF" }, priority = 54)
+	@IRaftTest(testCaseID = "TC_QF_54", testDesc = "Find lying list pallet stack", author = "A-10839")
+	public void findLyingList() throws Exception {
+
+		String listPalletStack = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/palletstacks/list";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(listPalletStack, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+
+		JSONArray responseArray = new JSONArray(resp1.asString());
+		JSONObject respJson = responseArray.getJSONObject(0);
+		String AIRPORT = sp1.getNodeValueFromJsonResponse(respJson, "airport");
+		System.out.println("AIRPORT:" + AIRPORT);
+		TestData.setInterimData(className, "AIRPORT", AIRPORT);
+		Assert.assertEquals("AIRPORT - Verified", AIRPORT, lData("ORIGIN"));
+		TestData.setInterimData(className, "BasePallet", sp1.getNodeValueFromJsonResponse(respJson, "base_pallet"));
+	}
+
+//Delete pallet stack:204 
+	@Test(enabled = true, groups = { "QF" }, priority = 55)
+	@IRaftTest(testCaseID = "TC_QF_55", testDesc = "Delete pallet stack", author = "A-10839")
+	public void deletePalletStack() throws Exception {
+
+		String deletePalletStack = lData("NEO_URL") + "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN")
+				+ "/palletstacks/" + "PMC89825AY";
+		APIUtil api = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		Response resp = api.sendRESTDELETERequest(deletePalletStack, "Content-Type", "application/json", "x-api-key",
+				lData("API_KEY"), "ICO-Authorization", iData("sessionId"));
+
+	}
+
+//ULD API
+//ULD damage capture API
+	@Test(enabled = true, groups = { "QF" }, priority = 56)
+	@IRaftTest(testCaseID = "TC_QF_56", testDesc = "ULD damage capture API", author = "A-10839")
+	public void uldDamageCapture() throws Exception {
+		login(gData("OPS_USERNAMENEW")).goToULD013().createULD(lData("ULDTYPE"), lData("OAL"), "ULDNO", className)
+				.ULDAssetDtls(iData("cancelDT"), lData("ULDPRICE")).saveULD().close();
+		String[] tagName = { "airport" };
+		String[] tagValues = { lData("ORIGIN") };
+		String uldDamageCapture_endpoint = "/icargo-api/qf/enterprise/v1/ulds/" + iData("ULDNO") + "/damage";
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldDamageCapture.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(uldDamageCapture_endpoint, requestjson, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("damage report created successfully"),
+				"Damage report created successfully");
+	}
+
+//Get ULD damage details	
+	@Test(enabled = true, groups = { "QF" }, priority = 57)
+	@IRaftTest(testCaseID = "TC_QF_57", testDesc = "Get ULD damage details", author = "A-10839")
+	public void getULDDamageDetails() throws Exception {
+
+		String getULDDamageDetails = "/icargo-api/qf/enterprise/v1/ulds/" + iData("ULDNO");
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(getULDDamageDetails, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String ULD_DAMAGE = sp1.getNodeValueFromJsonResponse(response1, "uld_number");
+		System.out.println("ULD_DAMAGE:" + ULD_DAMAGE);
+		String DAMAGESTATUS = sp1.getNodeValueFromJsonResponse(response1, "operational_details.damage_status");
+		System.out.println("DAMAGESTATUS:" + DAMAGESTATUS);
+
+		Assert.assertEquals("ULD_DAMAGE- Verified", ULD_DAMAGE, iData("ULDNO"));
+		Assert.assertEquals("DAMAGESTATUS - Verified", DAMAGESTATUS, "S");
+
+	}
+
+//Get ULD Operational information
+	@Test(enabled = true, groups = { "QF" }, priority = 58)
+	@IRaftTest(testCaseID = "TC_QF_58", testDesc = "Get ULD Operational information", author = "A-10839")
+	public void getULDOperationalInformation() throws Exception {
+
+		String getULDDamageDetails = "/icargo-api/qf/enterprise/v1/ulds/" + iData("uldno1");
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(getULDDamageDetails, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String STATUS = sp1.getNodeValueFromJsonResponse(response1, "operational_details.status");
+		System.out.println("STATUS:" + STATUS);
+		String DAMAGESTATUS = sp1.getNodeValueFromJsonResponse(response1, "operational_details.damage_status");
+		System.out.println("DAMAGESTATUS:" + DAMAGESTATUS);
+		String CARRIER = sp1.getNodeValueFromJsonResponse(response1, "operational_details.operating_airline");
+		System.out.println("CARRIER:" + CARRIER);
+
+		Assert.assertEquals("STATUS- Verified", STATUS, "O");
+		Assert.assertEquals("DAMAGESTATUS - Verified", DAMAGESTATUS, "N");
+		 Assert.assertEquals("CARRIER - Verified", CARRIER, gData("CARRIER_CODE")); 
+	}
+//Manifest API
+//Capture NOTOC entry
+
+	@Test(enabled = true, groups = { "QF" }, priority = 59)
+	@IRaftTest(testCaseID = "TC_QF_59", testDesc = "Get Next AWB4", author = "A-10839")
+	public void getNextAWB4() throws Exception {
+
+		String[] tagName1 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue1 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("findNext.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(nextAWB_endpoint, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String AWB_notoc = sp1.getNodeValueFromJsonResponse(response1, "document_number");
+		TestData.setInterimData(className, "AWB_notoc", AWB_notoc);
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 60)
+	@IRaftTest(testCaseID = "TC_QF_60", testDesc = "createNotocFlight", author = "A-10839")
+	public void createNotocFlight() throws Exception {
+		String NotocFlt = BizUtility.createFlightNumWithRange(1000, 2999);
+		
+		TestData.setInterimData(className, "NotocFlt", NotocFlt);
+		String fullNotocFlt = gData("CARRIER_CODE") + NotocFlt;
+		TestData.setInterimData(className, "fullNotocFlt", fullNotocFlt);
+		TestData.setInterimData(className, "Notocfltdate", BasePage.getDate(0, "dd-MMM-YYYY"));
+		int time1Hr = BasePage.getCurrentTimeHr(5, 30, 0);
+		int time1Min = BasePage.getCurrentTimeMin(4, 00, 0);
+		String time1HH = (time1Hr + "").length() >= 2 ? (time1Hr + "") : "0" + time1Hr;
+		String time1MIN = (time1Min + "").length() >= 2 ? (time1Min + "") : "0" + time1Min;
+		TestData.setInterimData(className, "STD_TIME", time1HH + ":" + time1MIN + ":57+10:00");
+		String STD2 = BasePage.getDate(0, "YYYY-MM-dd") + "T" + iData("STD_TIME");
+		TestData.setInterimData(className, "STD2", STD2);
+
+		String[] tagName1 = { "owner", "truck_type", "offer_display", "truck_vendor", "schedule_type", "flight_number",
+				"origin", "destination", "control_office", "leg[0].STA", "leg[0].STD", "leg[0].departure_position",
+				"leg[0].origin", "leg[0].aircraft", "leg[0].destination", "leg[0].departure_gate", "leg[0].ATA",
+				"leg[0].operating_reference[0].flight_number", "leg[0].operating_reference[0].carrier_code",
+				"leg[0].ATD", "leg[0].departure_terminal", "leg[0].service_type", "leg[0].ETA", "leg[0].ETD",
+				"leg[0].nonoperating_reference[0].flight_number", "leg[0].nonoperating_reference[0].carrier_code",
+				"leg[0].arrival_position", "leg[0].aircraft_owner", "leg[0].arrival_gate", "leg[0].arrival_terminal",
+				"control_stations", "route", "flight_date", "flight_type", "domestic_flight", "remarks", "carrier_code",
+				"status", };
+
+		Object[] tagValue1 = { "QF", "FLTBED", true, "DHLSYD", "Own", NotocFlt, "SYD", "MEL", "SYD",
+				iData("STD2").split("T")[0] + "T16:39:57+10:00", iData("STD2").split("T")[0] + "T09:13:57+10:00", "T3",
+				"SYD", "789", "MEL", "BAY1", iData("STD2").split("T")[0] + "T16:39:57+10:00", NotocFlt, "QF",
+				iData("STD2").split("T")[0] + "T13:30:57+10:00", "T1", "J",
+				iData("STD2").split("T")[0] + "T16:39:57+10:00", iData("STD2").split("T")[0] + "T13:30:57+10:00",
+				NotocFlt, "QF", "F1", "QF", "BAY3", "T3", "SYD", "SYD-MEL", iData("STD2").split("T")[0], "Combination",
+				false, "Flight remarks", "QF", "Active", };
+
+		String endPoint1 = "/icargo-api/qf/enterprise/v1/flights/" + fullNotocFlt + "-" + iData("Notocfltdate");
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("saveFlight.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(endPoint1, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 61)
+	@IRaftTest(testCaseID = "TC_QF_61", testDesc = "Capture booking details of a shipmnet", author = "A-10839")
+	public void captureBooking4() throws Exception {
+
+		String[] tagName = { "awb", "origin", "destination", "shipping_date", "agent_code", "special_handling_codes",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code",
+				"shipment_details[0].nature_of_goods", "flights[0].flight_carrier", "flights[0].flight_number",
+				"flights[0].departure_date", "flights[0].departure_airport", "flights[0].arrival_airport" };
+		Object[] tagValue = { iData("AWB_notoc"), lData("ORIGIN"), lData("DESTINATION"), iData("STD2").split("T")[0],
+				lData("AGENT_BOOK"), "[\"" + lData("SCC_DG") + "\"]", lData("SCC_DG"), lData("SCC_DG"),
+				lData("SHIPPING_NAME"), gData("COMPANY_CODE"), iData("NotocFlt"), iData("STD2").split("T")[0],
+				lData("ORIGIN"), lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("AWB_notoc");
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJsonwithJsonArray("normalBookingNeo.json", tagName, tagValue);
+
+		Response resp = sp.sendRESTPOSTRequest(endPoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson = sp.returnJSONObjectFromResponse(resp);
+		String AWB4 = sp.getNodeValueFromJsonResponse(responsejson, "awb");
+		System.out.println("AWB number:" + AWB4);
+		String status = sp.getNodeValueFromJsonResponse(responsejson, "booking_status");
+		Assert.assertTrue("CFM", status.contains("CFM"));
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 62)
+	@IRaftTest(testCaseID = "TC_QF_62", testDesc = "Capture AWB details for DG/SL shipments", author = "A-10839")
+	public void captureAWBDetailsDG2() throws Exception {
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName = { "special_handling_code", "shipping_name", "no_of_packages", "net_quantity" };
+		String[] tagValues = { lData("SCC_DG"), lData("SHIPPING_NAME"), lData("NO_PKGS"), lData("NET_QTY") };
+
+		String dg_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("AWB_notoc") + "/dangerous-goods-information";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("captureAwbDg.json", tagName, tagValues);
+		Thread.sleep(40000);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(dg_endpoint).then().statusCode(200).and().log().all()
+				.extract().response();
+
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+
+//Update AWB Split details
+	@Test(enabled = true, groups = { "QF" }, priority = 63)
+	@IRaftTest(testCaseID = "TC_QF_63", testDesc = "Update AWB Split details", author = "A-10839")
+	public void updateAWBSplitDetails() throws Exception {
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName = { "weight" };
+		String[] tagValues = { lData("WEIGHT") };
+		String updateAWBSplitDetails = "/icargo-api/qf/enterprise/v1/awbs/" + iData("document_number3")
+				+ "/split-information";
+		logger.info(updateAWBSplitDetails);
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		JSONObject requestjson = sp.updateNestedJson("updateSplit.json", tagName, tagValues);
+		logger.info(requestjson);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson + "]").when().post(updateAWBSplitDetails).then().statusCode(200).and().log()
+				.all().extract().response();
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("awb split details updated successfully"),
+				"AWB Split details updated successfully");
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 64)
+	@IRaftTest(testCaseID = "TC_QF_64", testDesc = "Capture acceptance in both ULD and loose", author = "A-10839")
+	public void captureAcceptanceULDLoose4() throws Exception {
+
+		TestData.setInterimData(className, "AWBNO3", iData("AWB_notoc").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("AWBNO3"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").clickSplitShipment()
+				.addSplitShipmentDetails(lData("PIECES"), lData("WEIGHT"), "", 1, "ICE").executeAWB()
+				.verifyAWBOnExecute("", className).getAWBStatus("Executed").close();
+		String[] tagName = { "acceptance_details[0].pieces", "acceptance_details[0].weight", };
+		String[] tagValues = { lData("PIECES"), lData("WEIGHT") };
+
+		String captureAcceptance = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("AWB_notoc");
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("dgAcceptance.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureAcceptance, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 65)
+	@IRaftTest(testCaseID = "TC_QF_65", testDesc = "ULD build up", author = "A-10839")
+	public void uLDBuildUp4() throws Exception {
+
+		String uldno3 = BizUtility.createULDNum(lData("ULDTYPE"), lData("OAL"));
+		TestData.setInterimData(className, "uldno3", uldno3);
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+
+		String uLDBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldno3");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldBuildup.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(uLDBuildUp, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 66)
+	@IRaftTest(testCaseID = "TC_QF_66", testDesc = "AWB build up", author = "A-10839")
+	public void securityScreening1() throws Exception {
+
+		String[] screeningMethod = new String[] { lData("SCREENINGMETHOD") };
+		String[] pcs = new String[] { lData("PIECES") };
+		String[] wt = new String[] { lData("WEIGHT") };
+		String[] result = new String[] { lData("RESULT") };
+		login(gData("OPS_USERNAMENEW")).goToOPR339().listAWB(gData("AWB_PREFIX"), iData("AWBNO3"))
+				.screeningCapture(screeningMethod, pcs, wt, result, new String[] { "" }, new String[] { "" },
+						new String[] { "" })
+				.screeningSave(true).listAWB(gData("AWB_PREFIX"), iData("AWBNO3")).close().goToOPR335()
+				.listAWB(gData("AWB_PREFIX"), iData("AWBNO3")).verifyAllPartsReceivedChecked().readyforcarriageCheck()
+				.acceptanceFinalizedCheck().close();
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 67)
+	@IRaftTest(testCaseID = "TC_QF_67", testDesc = "AWB build up", author = "A-10839")
+	public void aWBBuildUp1() throws Exception {
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String aWBBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno3")
+				+ "/awbs/" + iData("AWB_notoc");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("AwbBuildup.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(aWBBuildUp, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 68)
+	@IRaftTest(testCaseID = "TC_QF_68", testDesc = "Capture NOTOC entry", author = "A-10839")
+	public void captureNotocEntry() throws Exception {
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String captureNotocEntry = "/icargo-api/qf/enterprise/v1/notoc/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno3")
+				+ "/awbs/" + iData("AWB_notoc");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureNotoc.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureNotocEntry, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("notoc entry saved successfully"),
+				"NOTOC entry saved successfully");
+	}
+
+//Retrieve NOTOC information of an AWB for an airport
+	@Test(enabled = true, groups = { "QF" }, priority = 69)
+	@IRaftTest(testCaseID = "TC_QF_69", testDesc = "Retrieve NOTOC information of an AWB for an airport", author = "A-10839")
+	public void retrieveNOTOCAWB() throws Exception {
+
+		String retrieveNOTOCAWB = "/icargo-api/qf/enterprise/v1/notoc/" + lData("ORIGIN") + "/awbs/"
+				+ iData("AWB_notoc");
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(retrieveNOTOCAWB, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONArray responseArray = new JSONArray(resp1.asString());
+		JSONObject respJson = responseArray.getJSONObject(0);
+		String flight = sp1.getNodeValueFromJsonResponse(respJson, "flight");
+		System.out.println("flight:" + flight);
+		String ORIGIN = sp1.getNodeValueFromJsonResponse(respJson, "point_of_lading");
+		System.out.println("ORIGIN:" + ORIGIN);
+		String AWB_DG = sp1.getNodeValueFromJsonResponse(respJson, "uld[0].dangerous_goods[0].awb");
+		Assert.assertEquals("flight- Verified", flight,
+				gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT"));
+		Assert.assertEquals("AWB_DG - Verified", AWB_DG, iData("AWB_notoc"));
+	}
+
+//Get NOTOC details of a flight
+	@Test(enabled = true, groups = { "QF" }, priority = 70)
+	@IRaftTest(testCaseID = "TC_QF_70", testDesc = "Get NOTOC details of a flight", author = "A-10839")
+	public void getNOTOCDetailsFlight() throws Exception {
+
+		String getNOTOCDetailsFlight = "/icargo-api/qf/enterprise/v1/notoc/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT");
+		logger.info(getNOTOCDetailsFlight);
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(getNOTOCDetailsFlight, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject responsejson = sp1.returnJSONObjectFromResponse(resp1);
+
+		String flight = sp1.getNodeValueFromJsonResponse(responsejson, "flight");
+		System.out.println("flight:" + flight);
+		String ORIGIN = sp1.getNodeValueFromJsonResponse(responsejson, "airport");
+		System.out.println("ORIGIN:" + ORIGIN);
+		String AWB_DG = sp1.getNodeValueFromJsonResponse(responsejson, "segments[0].uld[0].dangerous_goods[0].awb");
+		Assert.assertEquals("flight- Verified", flight,
+				gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT"));
+		Assert.assertEquals("AWB_DG - Verified", AWB_DG, iData("AWB_notoc"));
+	}
+
+//Get manifest details of a flight
+	@Test(enabled = true, groups = { "QF" }, priority = 71)
+	@IRaftTest(testCaseID = "TC_QF_71", testDesc = "Get manifest details of a flight", author = "A-10839")
+	public void getManifestDetailsFlight() throws Exception {
+
+		login(gData("OPS_USERNAMENEW")).goToOPR344().listFlight(gData("CARRIER_CODE"), iData("fltNo2"), iData("cancelDT"))
+				.manifestFlight(true).finalizeFlight().close();
+
+		String getManifestDetailsFlight = "/icargo-api/qf/enterprise/v1/manifests/" + lData("ORIGIN")
+				+ "/EXPORT/flights/" + gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT");
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(getManifestDetailsFlight, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject responsejson = sp1.returnJSONObjectFromResponse(resp1);
+
+		String flight = sp1.getNodeValueFromJsonResponse(responsejson, "flight");
+		System.out.println("flight:" + flight);
+		String ORIGIN = sp1.getNodeValueFromJsonResponse(responsejson, "airport");
+		System.out.println("ORIGIN:" + ORIGIN);
+		String ULD = sp1.getNodeValueFromJsonResponse(responsejson, "segments[0].ulds[0].uld");
+		Assert.assertEquals("flight- Verified", flight,
+				gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT"));
+		Assert.assertEquals("ULD - Verified", ULD, iData("uldno1"));
+	}
+
+//Break down API
+//Capture AWB break down
+	@Test(enabled = true, groups = { "QF" }, priority = 72)
+	@IRaftTest(testCaseID = "TC_QF_72", testDesc = "Capture AWB break down", author = "A-10839")
+	public void captureAWBBreakdown() throws Exception {
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String captureAWBBreakdown = "/icargo-api/qf/enterprise/v1/breakdowns/" + lData("DESTINATION") + "/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno1")
+				+ "/awbs/" + iData("document_number3");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureAwbBreakdown.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureAWBBreakdown, requestjson, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("breakdown successful"),
+				"Breakdown successful");
+	}
+
+	// Capture ULD breakdown
+	@Test(enabled = true, groups = { "QF" }, priority = 73)
+	@IRaftTest(testCaseID = "TC_QF_73", testDesc = "ULD Build Up", author = "A-10839")
+	public void uldBuildUP4() throws Exception {
+
+//flightcreation
+		String qfflight = BizUtility.createFlightNumWithRange(1000, 2999);
+		TestData.setInterimData(className, "qfflight", qfflight);
+		String fullqfflight = gData("CARRIER_CODE") + qfflight;
+		TestData.setInterimData(className, "qfflight", qfflight);
+		TestData.setInterimData(className, "qfflightdate", BasePage.getDate(0, "dd-MMM-YYYY"));
+		String STD = BasePage.getDate(0, "YYYY-MM-dd");
+		TestData.setInterimData(className, "STD", STD);
+
+		String[] tagName1 = { "owner", "truck_type", "offer_display", "truck_vendor", "schedule_type", "flight_number",
+				"origin", "destination", "control_office", "leg[0].STA", "leg[0].STD", "leg[0].departure_position",
+				"leg[0].origin", "leg[0].aircraft", "leg[0].destination", "leg[0].departure_gate", "leg[0].ATA",
+				"leg[0].operating_reference[0].flight_number", "leg[0].operating_reference[0].carrier_code",
+				"leg[0].ATD", "leg[0].departure_terminal", "leg[0].service_type", "leg[0].ETA", "leg[0].ETD",
+				"leg[0].nonoperating_reference[0].flight_number", "leg[0].nonoperating_reference[0].carrier_code",
+				"leg[0].tail_number", "leg[0].arrival_position", "leg[0].aircraft_owner", "leg[0].arrival_gate",
+				"leg[0].arrival_terminal", "control_stations", "route", "flight_date", "flight_type", "domestic_flight",
+				"remarks", "carrier_code", "status", };
+
+		Object[] tagValue1 = { "QF", "FLTBED", true, "DHLSYD", "Own", qfflight, "SYD", "MEL", "SYD",
+				iData("STD").split("T")[0] + "T16:39:57+10:00", iData("STD") + "T09:13:57+10:00", "T3", "SYD", "762",
+				"MEL", "BAY1", iData("STD") + "T16:39:57+10:00", qfflight, "QF", iData("STD") + "T13:30:57+10:00", "T1",
+				"J", iData("STD") + "T16:39:57+10:00", iData("STD") + "T13:30:57+10:00", qfflight, "QF", "ZKFXL", "F1",
+				"QF", "BAY3", "T3", "SYD", "SYD-MEL", iData("STD"), "Combination", false, "Flight remarks", "QF",
+				"Active", };
+
+		String endPoint1 = "/icargo-api/qf/enterprise/v1/flights/" + fullqfflight + "-" + iData("qfflightdate");
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("saveFlight.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(endPoint1, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("update successful"), "Update successful");
+//doc number
+		String[] tagName2 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue2 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJsonwithJsonObjects("findNext.json", tagName2, tagValue2);
+		Response resp2 = sp2.sendRESTPOSTRequest(nextAWB_endpoint, requestjson2, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response2 = sp1.returnJSONObjectFromResponse(resp2);
+
+		String uldDocNO = sp1.getNodeValueFromJsonResponse(response2, "document_number");
+		TestData.setInterimData(className, "uldDocNO", uldDocNO);
+//booking
+		String[] tagName3 = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date", "flights[0].departure_airport",
+				"flights[0].arrival_airport" };
+		String[] tagValue3 = { iData("uldDocNO"), lData("ORIGIN"), lData("DESTINATION"), iData("STD"),
+				lData("AGENT_BOOK"), lData("SCC"), lData("SCC"), gData("COMPANY_CODE"), iData("qfflight"), iData("STD"),
+				lData("ORIGIN"), lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("uldDocNO");
+
+		APIUtil sp3 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson3 = sp3.updateNestedJson("normalBookingNeo.json", tagName3, tagValue3);
+
+		Response resp3 = sp3.sendRESTPOSTRequest(endPoint, requestjson3, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson3 = sp3.returnJSONObjectFromResponse(resp3);
+		String docno = sp3.getNodeValueFromJsonResponse(responsejson3, "awb");
+
+		System.out.println("AWB number:" + docno);
+		TestData.setInterimData(className, "docno", docno);
+//acceptance	
+		TestData.setInterimData(className, "docnospt", iData("docno").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("docnospt"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").executeAWB().verifyAWBOnExecute("", className)
+				.getAWBStatus("Executed").close();
+		String[] tagName4 = { "acceptance_details[0].pieces", "acceptance_details[0].weight", };
+		String[] tagValues4 = { lData("PIECES"), lData("WEIGHT") };
+
+		String captureAcceptance4 = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("docno");
+		APIUtil sp4 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson4 = sp4.updateNestedJson("looseAcceptance.json", tagName4, tagValues4);
+		Response resp4 = sp4.sendRESTPOSTRequest(captureAcceptance4, requestjson4, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp4.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+//screening
+
+		String[] screeningMethod = new String[] { lData("SCREENINGMETHOD") };
+		String[] pcs = new String[] { lData("PIECES") };
+		String[] wt = new String[] { lData("WEIGHT") };
+		String[] result = new String[] { lData("RESULT") };
+		login(gData("OPS_USERNAMENEW")).goToOPR339().listAWB(gData("AWB_PREFIX"), iData("docnospt"))
+				.screeningCapture(screeningMethod, pcs, wt, result, new String[] { "" }, new String[] { "" },
+						new String[] { "" })
+				.checkSecurityDataReview().screeningSave(true).listAWB(gData("AWB_PREFIX"), iData("docnospt")).close()
+				.goToOPR335().listAWB(gData("AWB_PREFIX"), iData("docnospt")).verifyAllPartsReceivedChecked()
+				.readyforcarriageCheck().acceptanceFinalizedCheck().close();
+//uld build up
+		String uldno4 = BizUtility.createULDNum(lData("ULDTYPE"), lData("OAL"));
+		TestData.setInterimData(className, "uldno4", uldno4);
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String uLDBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("qfflight") + "-" + iData("cancelDT") + "/ulds/" + uldno4;
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldBuildup.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(uLDBuildUp, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+//awb build up
+		String[] tagName5 = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues5 = { lData("ORIGIN"), lData("DESTINATION") };
+		String aWBBuildUp5 = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("qfflight") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno4")
+				+ "/awbs/" + iData("docno");
+
+		APIUtil sp5 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson5 = sp.updateNestedJson("AwbBuildup.json", tagName5, tagValues5);
+		Response resp5 = sp5.sendRESTPOSTRequest(aWBBuildUp5, requestjson5, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp5.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+//finalize filght
+		login(gData("OPS_USERNAMENEW")).goToOPR344()
+				.listFlight(gData("CARRIER_CODE"), iData("qfflight"), iData("cancelDT")).manifestFlight(true)
+				.finalizeFlight().close();
+
+	}
+
+	@Test(enabled = true, groups = { "QF" }, priority = 74)
+	@IRaftTest(testCaseID = "TC_QF_74", testDesc = "Capture ULD breakdown", author = "A-10839")
+	public void captureULDBreakdown() throws Exception {
+
+		String[] tagName = { "warehouse" };
+		String[] tagValues = { lData("MEL_WAREHOUSE") };
+		String captureULDBreakdown = "/icargo-api/qf/enterprise/v1/breakdowns/" + lData("DESTINATION") + "/"
+				+ gData("CARRIER_CODE") + "-" + iData("qfflight") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldno4");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureUldBreakdown.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureULDBreakdown, requestjson, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("breakdown successful"),
+				"Breakdown successful");
+
+	}
+
+//Mark ULD as breakdown complete
+	@Test(enabled = true, groups = { "QF" }, priority = 75)
+	@IRaftTest(testCaseID = "TC_QF_75", testDesc = "Mark ULD as breakdown complete", author = "A-10839")
+	public void markULDBreakdownComplete() throws Exception {
+
+//flightcreation
+		String cmpleteflight = BizUtility.createFlightNumWithRange(1000, 2999);
+		TestData.setInterimData(className, "cmpleteflight", cmpleteflight);
+		String fullcmpleteflight = gData("CARRIER_CODE") + cmpleteflight;
+		TestData.setInterimData(className, "fullcmpleteflight", fullcmpleteflight);
+		TestData.setInterimData(className, "cmpleteflightdate", BasePage.getDate(0, "dd-MMM-YYYY"));
+		String STD = BasePage.getDate(0, "YYYY-MM-dd");
+		TestData.setInterimData(className, "STD", STD);
+
+		String[] tagName1 = { "owner", "truck_type", "offer_display", "truck_vendor", "schedule_type", "flight_number",
+				"origin", "destination", "control_office", "leg[0].STA", "leg[0].STD", "leg[0].departure_position",
+				"leg[0].origin", "leg[0].aircraft", "leg[0].destination", "leg[0].departure_gate", "leg[0].ATA",
+				"leg[0].operating_reference[0].flight_number", "leg[0].operating_reference[0].carrier_code",
+				"leg[0].ATD", "leg[0].departure_terminal", "leg[0].service_type", "leg[0].ETA", "leg[0].ETD",
+				"leg[0].nonoperating_reference[0].flight_number", "leg[0].nonoperating_reference[0].carrier_code",
+				"leg[0].tail_number", "leg[0].arrival_position", "leg[0].aircraft_owner", "leg[0].arrival_gate",
+				"leg[0].arrival_terminal", "control_stations", "route", "flight_date", "flight_type", "domestic_flight",
+				"remarks", "carrier_code", "status", };
+
+		Object[] tagValue1 = { "QF", "FLTBED", true, "DHLSYD", "Own", cmpleteflight, "SYD", "MEL", "SYD",
+				iData("STD").split("T")[0] + "T16:39:57+10:00", iData("STD") + "T09:13:57+10:00", "T3", "SYD", "762",
+				"MEL", "BAY1", iData("STD") + "T16:39:57+10:00", cmpleteflight, "QF", iData("STD") + "T13:30:57+10:00",
+				"T1", "J", iData("STD") + "T16:39:57+10:00", iData("STD") + "T13:30:57+10:00", cmpleteflight, "QF",
+				"ZKFXL", "F1", "QF", "BAY3", "T3", "SYD", "SYD-MEL", iData("STD"), "Combination", false,
+				"Flight remarks", "QF", "Active", };
+
+		String endPoint1 = "/icargo-api/qf/enterprise/v1/flights/" + fullcmpleteflight + "-"
+				+ iData("cmpleteflightdate");
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("saveFlight.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(endPoint1, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("update successful"), "Update successful");
+//doc number
+		String[] tagName2 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue2 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJsonwithJsonObjects("findNext.json", tagName2, tagValue2);
+		Response resp2 = sp2.sendRESTPOSTRequest(nextAWB_endpoint, requestjson2, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response2 = sp1.returnJSONObjectFromResponse(resp2);
+
+		String completeawbno = sp1.getNodeValueFromJsonResponse(response2, "document_number");
+		TestData.setInterimData(className, "completeawbno", completeawbno);
+//booking
+		String[] tagName3 = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date", "flights[0].departure_airport",
+				"flights[0].arrival_airport" };
+		String[] tagValue3 = { iData("completeawbno"), lData("ORIGIN"), lData("DESTINATION"), iData("STD"),
+				lData("AGENT_BOOK"), lData("SCC"), lData("SCC"), gData("COMPANY_CODE"), iData("cmpleteflight"),
+				iData("STD"), lData("ORIGIN"), lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("completeawbno");
+
+		APIUtil sp3 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson3 = sp3.updateNestedJson("normalBookingNeo.json", tagName3, tagValue3);
+
+		Response resp3 = sp3.sendRESTPOSTRequest(endPoint, requestjson3, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson3 = sp3.returnJSONObjectFromResponse(resp3);
+		String cmpletedoc = sp3.getNodeValueFromJsonResponse(responsejson3, "awb");
+
+		System.out.println("AWB number:" + cmpletedoc);
+		TestData.setInterimData(className, "cmpletedoc", cmpletedoc);
+//acceptance	
+		TestData.setInterimData(className, "cmpltetesplit", iData("cmpletedoc").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("cmpltetesplit"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").executeAWB().verifyAWBOnExecute("", className)
+				.getAWBStatus("Executed").close();
+		String[] tagName4 = { "acceptance_details[0].pieces", "acceptance_details[0].weight", };
+		String[] tagValues4 = { lData("PIECES"), lData("WEIGHT") };
+
+		String captureAcceptance4 = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("cmpletedoc");
+		APIUtil sp4 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson4 = sp4.updateNestedJson("looseAcceptance.json", tagName4, tagValues4);
+		Response resp4 = sp4.sendRESTPOSTRequest(captureAcceptance4, requestjson4, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp4.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+//screening
+
+		String[] screeningMethod = new String[] { lData("SCREENINGMETHOD") };
+		String[] pcs = new String[] { lData("PIECES") };
+		String[] wt = new String[] { lData("WEIGHT") };
+		String[] result = new String[] { lData("RESULT") };
+		login(gData("OPS_USERNAMENEW")).goToOPR339().listAWB(gData("AWB_PREFIX"), iData("cmpltetesplit"))
+				.screeningCapture(screeningMethod, pcs, wt, result, new String[] { "" }, new String[] { "" },
+						new String[] { "" })
+				.checkSecurityDataReview().screeningSave(true).listAWB(gData("AWB_PREFIX"), iData("cmpltetesplit"))
+				.close().goToOPR335().listAWB(gData("AWB_PREFIX"), iData("cmpltetesplit"))
+				.verifyAllPartsReceivedChecked().readyforcarriageCheck().acceptanceFinalizedCheck().close();
+//uld build up
+		String uldno5 = BizUtility.createULDNum(lData("ULDTYPE"), lData("OAL"));
+		TestData.setInterimData(className, "uldno5", uldno5);
+
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String uLDBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("cmpleteflight") + "-" + iData("cancelDT") + "/ulds/" + uldno5;
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldBuildup.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(uLDBuildUp, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+//awb build up
+		String[] tagName5 = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues5 = { lData("ORIGIN"), lData("DESTINATION") };
+		String aWBBuildUp5 = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("cmpleteflight") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldno5") + "/awbs/" + iData("cmpletedoc");
+
+		APIUtil sp5 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson5 = sp.updateNestedJson("AwbBuildup.json", tagName5, tagValues5);
+		Response resp5 = sp5.sendRESTPOSTRequest(aWBBuildUp5, requestjson5, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp5.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+//finalize filght
+		login(gData("OPS_USERNAMENEW")).goToOPR344()
+				.listFlight(gData("CARRIER_CODE"), iData("cmpleteflight"), iData("cancelDT")).manifestFlight(true)
+				.finalizeFlight().close();
+
+		String[] tagName6 = { "remarks" };
+		String[] tagValues6 = { lData("REMARKS_ULD") };
+		String markULDBreakdownComplete = "/icargo-api/qf/enterprise/v1/breakdowns/" + lData("DESTINATION") + "/"
+				+ gData("CARRIER_CODE") + "-" + iData("cmpleteflight") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldno5") + "/close";
+
+		APIUtil sp6 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson6 = sp.updateNestedJson("markULDBreakdownComplete.json", tagName6, tagValues6);
+		Response resp6 = sp6.sendRESTPOSTRequest(markULDBreakdownComplete, requestjson6, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		BasePage.Assert.assertTrue(resp6.asString().toLowerCase().contains("successful operation"),
+				"Successful operation");
+
+	}
+
+//Delete AWB breakdown
+	@Test(enabled = false, priority = 76)
+	@IRaftTest(testCaseID = "TC_QF_76", testDesc = "Delete AWB breakdown", author = "A-10839")
+	public void deleteAWBBreakdown() throws Exception {
+		;
+		String deleteAWBBreakdown = lData("NEO_URL") + "/icargo-api/qf/enterprise/v1/breakdowns/" + lData("DESTINATION")
+				+ "/" + gData("CARRIER_CODE") + "-" + iData("partFlight") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldno44") + "/awbs/" + iData("partdocno");
+		logger.info(deleteAWBBreakdown);
+
+		APIUtil api = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		Response resp = api.sendRESTDELETERequest(deleteAWBBreakdown, "Content-Type", "application/json", "x-api-key",
+				lData("API_KEY"), "ICO-Authorization", iData("sessionId"));
+
+	}
+
+//Ramp handling API
+//Capture ULD handover 
+	@Test(enabled = true, groups = { "QF" }, priority = 77)
+	@IRaftTest(testCaseID = "TC_QF_77", testDesc = "Capture ULD handover", author = "A-10839")
+	public void captureULDHandover() throws Exception {
+
+		String[] tagName = { "warehouse" };
+		String[] tagValues = { lData("SYD_WAREHOUSE") };
+		String captureULDBreakdown = "/icargo-api/qf/enterprise/v1/ramps/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("qfflight") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno4")
+				+ "/hand-over";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureULDHandover.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureULDBreakdown, requestjson, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("uld dispatch sucessful"),
+				"ULD Dispatch sucessful");
+
+	}
+
+//Capture ULD sighting
+	@Test(enabled = true, groups = { "QF" }, priority = 78)
+	@IRaftTest(testCaseID = "TC_QF_78", testDesc = "Capture ULD sighting", author = "A-10839")
+	public void captureULDSighting() throws Exception {
+
+		String[] tagName = { "point_of_lading", "flight" };
+		String[] tagValues = { lData("DESTINATION"),
+				gData("CARRIER_CODE") + "-" + iData("qfflight") + "-" + iData("cancelDT") };
+		String captureULDSighting = "/icargo-api/qf/enterprise/v1/ramps/" + lData("DESTINATION") + "/ulds/"
+				+ iData("uldno4") + "/receive";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureUldSighting.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureULDSighting, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("uld arrival sucessful"),
+				"ULD Arrival sucessful");
+
+	}
+
+//Get ramp handling details
+	@Test(enabled = true, priority = 79)
+	@IRaftTest(testCaseID = "TC_QF_79", testDesc = "Get ramp handling details", author = "A-10839")
+	public void getRampHandlingDetails() throws Exception {
+
+		String getRampHandlingDetails = "/icargo-api/qf/enterprise/v1/ramps/" + lData("ORIGIN") + "/OUTBOUND/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("qfflight") + "-" + iData("cancelDT");
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		Response resp1 = sp1.sendRESTGETRequest(getRampHandlingDetails, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String flights = sp1.getNodeValueFromJsonResponse(response1, "flight");
+		String AIRPORT = sp1.getNodeValueFromJsonResponse(response1, "airport");
+		String ULD = sp1.getNodeValueFromJsonResponse(response1, "ulds[0].uld");
+		Assert.assertEquals("flight  - Verified", flights,
+				gData("CARRIER_CODE") + "-" + iData("qfflight") + "-" + iData("cancelDT"));
+		Assert.assertEquals("AIRPORT - Verified", lData("ORIGIN"), AIRPORT);
+		Assert.assertEquals("ULD - Verified", iData("uldno4"), ULD);
+	}
+
+//Tracking API
+//Get track AWB
+	@Test(enabled = true, priority = 80)
+	@IRaftTest(testCaseID = "TC_QF_80", testDesc = "Get track AWB", author = "A-10839")
+	public void getTrackAWB() throws Exception {
+		String getTrackAWB = "/icargo-api/qf/enterprise/v1/trackings/awbs/" + iData("completeawbno");
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		Response resp1 = sp1.sendRESTGETRequest(getTrackAWB, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String AWB = sp1.getNodeValueFromJsonResponse(response1, "shipment_summary.awb");
+		String ORIGIN = sp1.getNodeValueFromJsonResponse(response1, "shipment_summary.origin");
+		String DESTINATION = sp1.getNodeValueFromJsonResponse(response1, "shipment_summary.destination");
+		Assert.assertEquals("AWB  - Verified", AWB, iData("completeawbno"));
+		Assert.assertEquals("ORIGIN - Verified", lData("ORIGIN"), ORIGIN);
+		Assert.assertEquals("DESTINATION - Verified", lData("DESTINATION"), DESTINATION);
+	}
+
+//Capture damage or discrepency of an AWB
+	@Test(enabled = true, groups = { "QF" }, priority = 81)
+	@IRaftTest(testCaseID = "TC_QF_81", testDesc = "Capture damage or discrepency of an AWB", author = "A-10839")
+	public void captureDamageDiscrepencyAWB() throws Exception {
+
+		String[] tagName = { "flight", "document[0].name" };
+		String[] tagValues = { gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT"),
+				iData("AWB_notoc") + "_Damage" };
+		String captureDamageDiscrepencyAWB = "/icargo-api/qf/enterprise/v1/tracings/" + lData("DESTINATION") + "/awbs/"
+				+ iData("AWB_notoc") + "/damage";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureDamage.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureDamageDiscrepencyAWB, requestjson, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("damage report created successfully"),
+				"Damage report created successfully");
+
+	}
+
+//Delivery API	
+//Capture AWB delivery
+	@Test(enabled = true, groups = { "QF" }, priority = 82)
+	@IRaftTest(testCaseID = "TC_QF_82", testDesc = "Capture AWB delivery", author = "A-10839")
+	public void captureAWBDelivery() throws Exception {
+
+		login(gData("OPS_USERNAMENEW")).goToADM009().switchRole(lData("DESTINATION"), "", "", "", "").goToOPR004()
+				.listULD(iData("uldno1"), gData("CARRIER_CODE"), iData("fltNo2"), iData("cancelDT"))
+				.breakdownComptlete(false).close().goToOPR293()
+				.listWithFlightNo(gData("CARRIER_CODE"), iData("fltNo2"), iData("cancelDT"))
+				.enterPickUpPersonAndCompany(lData("PICKUP_PERSON"), lData("COMPANY_NAME"))
+				.enteridDetails(lData("ID_TYPE"), lData("IDENTITY_NUMBER"), lData("ISSUING_COUNTRY"), true)
+				.generateRevalidateDeliveryID("Yes")
+				.paymentCollection(lData("PAYMENT_METHOD"), lData("PAYMENT_TEXT"), "").acceptPayment()
+				.setDeliveryDetailsToiData(iData("document_number3").split("-")[1], "", "", "DELIVERY_ID", "DN_NUMBER",
+						className)
+				.close();
+		Thread.sleep(20000);
+
+		String[] tagName1 = { "delivery_details.deliverylist_id" };
+		String[] tagValues1 = { iData("DELIVERY_ID") };
+
+		String captureAWBDelivery = "/icargo-api/qf/enterprise/v1/deliveries/" + lData("DESTINATION") + "/awbs/"
+				+ iData("document_number3");
+
+		APIUtil sp1 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJson("captureDeliveyAWB.json", tagName1, tagValues1);
+		Response resp1 = sp1.sendRESTPOSTRequest(captureAWBDelivery, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("delivered successfully"),
+				"Delivered successfully");
+	}
+
+//Get awb for delivery
+	@Test(enabled = true, priority = 83)
+	@IRaftTest(testCaseID = "TC_QF_83", testDesc = "Get awb for delivery", author = "A-10839")
+	public void getAWBDelivery() throws Exception {
+
+		String getAWBDelivery = "/icargo-api/qf/enterprise/v1/deliveries/" + lData("DESTINATION") + "/delivery-list/"
+				+ iData("DELIVERY_ID");
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		Response resp1 = sp1.sendRESTGETRequest(getAWBDelivery, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+
+		String Delivery_ID = sp1.getNodeValueFromJsonResponse(response1, "deliverylist_id");
+		String status = sp1.getNodeValueFromJsonResponse(response1, "status");
+		String AWB = sp1.getNodeValueFromJsonResponse(response1, "shipment_list[0].awb");
+		Assert.assertEquals("AWB  - Verified", AWB, iData("document_number3"));
+		Assert.assertEquals("status - Verified", "CMP", status);
+		Assert.assertEquals("Delivery_ID - Verified", iData("DELIVERY_ID"), Delivery_ID);
+	}
+
+//Generate delivery note for the shipments and complete the payment
+	@Test(enabled = false, groups = { "QF" }, priority = 84)
+	@IRaftTest(testCaseID = "TC_QF_84", testDesc = "Generate delivery note", author = "A-10839")
+	public void generateDeliveryNote() throws Exception {
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName1 = { "awb", "import_flights[0].flight_number" };
+		String[] tagValues1 = { iData("document_number3"), iData("fltNo2") };
+
+		String generateDeliveryNote = "/icargo-api/qf/enterprise/v1/deliverynotes/awb/" + lData("DESTINATION");
+		logger.info(generateDeliveryNote);
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("deliveryNoteGeneration.json", tagName1, tagValues1);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(generateDeliveryNote).then() .statusCode(200) .and()
+				.log().all().extract().response();
+
+		
+		 * BasePage.Assert.assertTrue(res.asString().toLowerCase().
+		 * contains("update successful"), "Update successful");
+		 
+
+	}
+
+//Tracking API addon
+//Track flight level mile stone
+	@Test(enabled = true, groups = { "QF" }, priority = 85)
+	@IRaftTest(testCaseID = "TC_QF_85", testDesc = "Track flight level mile stone", author = "A-10839")
+	public void trackFlightLevelMilesStone() throws Exception {
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String flight = gData("COMPANY_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT");
+
+		TestData.setInterimData(className, "flightFinal", flight);
+		String trackFlightLevelMilesStone = "/icargo-api/qf/enterprise/v1/plans/flight/" + iData("flightFinal");
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.params("plan-type", "TRACKING").when().get(trackFlightLevelMilesStone).then().statusCode(200).and()
+				.log().all().extract().response();
+		JSONObject response1 = sp.returnJSONObjectFromResponse(res);
+
+		String flight1 = sp.getNodeValueFromJsonResponse(response1, "flight");
+		String milestone = sp.getNodeValueFromJsonResponse(response1, "milestones[0].milestone");
+		String airport = sp.getNodeValueFromJsonResponse(response1, "milestones[0].airport");
+		Assert.assertEquals("flight  - Verified", flight1, iData("flightFinal"));
+		Assert.assertEquals("airport - Verified", "SYD", airport);
+	}
+
+	// Get AWB level mile stone details
+	@Test(enabled = true, groups = { "QF" }, priority = 86)
+	@IRaftTest(testCaseID = "TC_QF_86", testDesc = "Get AWB level mile stone details", author = "A-10839")
+	public void getAWBLevelmileStone() throws Exception {
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String getAWBLevelmileStone = "/icargo-api/qf/enterprise/v1/plans/awbs/" + iData("docno");
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.params("plan-type", "SLAM").when().get(getAWBLevelmileStone).then().statusCode(200).and().log().all()
+				.extract().response();
+		JSONObject response1 = sp.returnJSONObjectFromResponse(res);
+		String awb = sp.getNodeValueFromJsonResponse(response1, "awb");
+		Assert.assertEquals("AWB - Verified", awb, iData("docno"));
+
+	}
+
+//Get Flight tracking details
+	@Test(enabled = true, priority = 87)
+	@IRaftTest(testCaseID = "TC_QF_87", testDesc = "Get Flight tracking details", author = "A-10839")
+	public void getFlightTrackingDetails() throws Exception {
+		String getFlightTrackingDetails = "/icargo-api/qf/enterprise/v1/trackings/flight/" + iData("flightFinal");
+
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		Response resp1 = sp1.sendRESTGETRequest(getFlightTrackingDetails, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp1);
+		String flight1 = sp1.getNodeValueFromJsonResponse(response1, "flight");
+		String airport = sp1.getNodeValueFromJsonResponse(response1, "flight_history[0].airport");
+		Assert.assertEquals("flight  - Verified", flight1, iData("flightFinal"));
+		Assert.assertEquals("airport - Verified", "SYD", airport);
+
+	}
+
+//Retrive tracking notifications
+	@Test(enabled = true, priority = 88)
+	@IRaftTest(testCaseID = "TC_QF_88", testDesc = "Retrive tracking notifications", author = "A-10839")
+	public void retriveTrackingNotifications() throws Exception {
+
+		String[] tagName1 = { "notification_details[0].mode" };
+		String[] tagValues1 = { "EMAIL" };
+
+		String retriveTrackingNotifications = "/icargo-api/qf/enterprise/v1/notifications/subscriptions/awbs/"
+				+ iData("docno");
+
+		APIUtil sp1 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJson("trackingNotification.json", tagName1, tagValues1);
+		Response resp1 = sp1.sendRESTPOSTRequest(retriveTrackingNotifications, requestjson1, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("subscription created successfully"),
+				"Subscription created successfully");
+
+		String getFlightTrackingDetails = "/icargo-api/qf/enterprise/v1/notifications/subscriptions/awbs/"
+				+ iData("docno");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+
+		Response resp = sp.sendRESTGETRequest(getFlightTrackingDetails, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response1 = sp1.returnJSONObjectFromResponse(resp);
+		String mode = sp1.getNodeValueFromJsonResponse(response1, "notification_details[0].mode");
+
+		Assert.assertEquals("mode  - Verified", "EMAIL", mode);
+
+	}
+	// Capture HAWB details
+
+	@Test(enabled = true, groups = { "QF" }, priority = 89)
+	@IRaftTest(testCaseID = "TC_QF_89", testDesc = "Capture HAWB details", author = "A-10839")
+	public void captureHAWBDetails() throws Exception {
+
+		String[] tagName2 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue2 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJsonwithJsonObjects("findNext.json", tagName2, tagValue2);
+		Response resp2 = sp2.sendRESTPOSTRequest(nextAWB_endpoint, requestjson2, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response2 = sp2.returnJSONObjectFromResponse(resp2);
+
+		String awbHawb = sp2.getNodeValueFromJsonResponse(response2, "document_number");
+		TestData.setInterimData(className, "awbHawb", awbHawb);
+
+		TestData.setInterimData(className, "hawb_num", iData("awbHawb").split("-")[1]);
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName = { "hawb", "origin", "destination" };
+		String[] tagValues = { iData("hawb_num") + lData("HAWB"), lData("ORIGIN"), lData("DESTINATION") };
+
+		String hawb_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("awbHawb") + "/hawbs";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("captureHawb.json", tagName, tagValues);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(hawb_endpoint).then().statusCode(200).and().log().all()
+				.extract().response();
+
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("house awb data saved successfully"),
+				"House AWB Data Saved Successfully");
+
+	}
+
+	// List HAWB details
+	@Test(enabled = true, groups = { "QF" }, priority = 90)
+	@IRaftTest(testCaseID = "TC_QF_90", testDesc = "List HAWB details", author = "A-10839")
+	public void listHAWBDetails() throws Exception {
+		String listHAWBDetails = "/icargo-api/qf/enterprise/v2/awbs/" + iData("awbHawb") + "/hawbs";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(listHAWBDetails, "ICO-Authorization", iData("sessionId"), "x-api-key",
+				lData("API_KEY"), "Content-Type", "application/json");
+
+		JSONArray responseArray = new JSONArray(resp1.asString());
+		JSONObject respJson = responseArray.getJSONObject(0);
+
+		String AWB = sp1.getNodeValueFromJsonResponse(respJson, "awb");
+		System.out.println("awb:" + AWB);
+		TestData.setInterimData(className, "AWB", AWB);
+		String HAWB = sp1.getNodeValueFromJsonResponse(respJson, "hawb");
+
+		System.out.println("HAWB:" + HAWB);
+		TestData.setInterimData(className, "HAWB", HAWB);
+		Assert.assertEquals("AWB - Verified", AWB, iData("awbHawb"));
+		Assert.assertEquals("HAWB - Verified", HAWB, iData("hawb_num") + lData("HAWB"));
+
+	}
+
+	// Delete HAWB details
+	@Test(enabled = true, priority = 91)
+	@IRaftTest(testCaseID = "TC_QF_91", testDesc = "Delete HAWB details", author = "A-10839")
+	public void deleteHAWBDetails() throws Exception {
+
+		String CANCEL_HAWB = lData("NEO_URL") + "/icargo-api/qf/enterprise/v2/awbs/" + iData("awbHawb") + "/hawbs/"
+				+ iData("hawb_num") + "H1";
+
+		APIUtil api = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		Response resp = api.sendRESTDELETERequest(CANCEL_HAWB, "Content-Type", "application/json", "x-api-key",
+				lData("API_KEY"), "ICO-Authorization", iData("sessionId"));
+
+	}
+
+	// Capture AWB additional contacts
+	@Test(enabled = true, priority = 92)
+	@IRaftTest(testCaseID = "TC_QF_92", testDesc = "Capture AWB additional contacts", author = "A-10839")
+	public void captureAWBAdditionalContacts() throws Exception {
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName1 = { "customer_code" };
+		String[] tagValues1 = { lData("AGENT") };
+
+		String captureAWBAdditionalContacts = "/icargo-api/qf/enterprise/v1/awbs/" + iData("awbHawb")
+				+ "/additionalcontacts";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("captureAWBContacts.json", tagName1, tagValues1);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(captureAWBAdditionalContacts).then().statusCode(200).and()
+				.log().all().extract().response();
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("awb contacts updated successfully"),
+				"AWB contacts updated successfully");
+
+	}
+
+//Modify AWB additional contacts
+	@Test(enabled = true, priority = 93)
+	@IRaftTest(testCaseID = "TC_QF_93", testDesc = "Modify AWB additional contacts", author = "A-10839")
+	public void modifyAWBAdditionalContacts() throws Exception {
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName1 = { "customer_code", "customer_name" };
+		String[] tagValues1 = { lData("AGENT"), lData("CUSTOMER_NAME") };
+
+		String captureAWBAdditionalContacts = "/icargo-api/qf/enterprise/v1/awbs/" + iData("awbHawb")
+				+ "/additionalcontacts";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("captureAWBContacts.json", tagName1, tagValues1);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(captureAWBAdditionalContacts).then().statusCode(200).and()
+				.log().all().extract().response();
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("awb contacts updated successfully"),
+				"AWB contacts updated successfully");
+
+	}
+
+	// Capture house AWB additional contacts
+	@Test(enabled = true, priority = 94)
+	@IRaftTest(testCaseID = "TC_QF_94", testDesc = "Modify AWB additional contacts", author = "A-10839")
+	public void captureHAWBAdditionalContacts() throws Exception {
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName = { "hawb", "origin", "destination" };
+		String[] tagValues = { iData("hawb_num1") + lData("HAWB"), lData("ORIGIN"), lData("DESTINATION") };
+
+		String hawb_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("awbHawb") + "/hawbs";
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("captureHawb.json", tagName, tagValues);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(hawb_endpoint).then().statusCode(200).and().log().all()
+				.extract().response();
+
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("house awb data saved successfully"),
+				"House AWB Data Saved Successfully");
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName1 = { "customer_code" };
+		String[] tagValues1 = { lData("AGENT") };
+
+		String captureHAWBAdditionalContacts = "/icargo-api/qf/enterprise/v1/awbs/" + iData("awbHawb") + "/hawbs/"
+				+ iData("hawb_num1") + "H1" + "/additionalcontacts";
+		APIUtil sp1 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp1.updateNestedJson("captureAWBContacts.json", tagName1, tagValues1);
+		Response res1 = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson2 + "]").when().post(captureHAWBAdditionalContacts).then().statusCode(200).and()
+				.log().all().extract().response();
+		BasePage.Assert.assertTrue(
+				res1.asString().toLowerCase().contains("hawb additional contacts saved successfully"),
+				"HAWB additional contacts Saved Successfully");
+
+	}
+
+	// Modify house AWB additional contacts
+	@Test(enabled = true, priority = 95)
+	@IRaftTest(testCaseID = "TC_QF_95", testDesc = "Modify house AWB additional contacts", author = "A-10839")
+	public void modifyHAWBAdditionalContacts() throws Exception {
+
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName1 = { "customer_code", "customer_name" };
+		String[] tagValues1 = { lData("AGENT"), lData("CUSTOMER_NAME") };
+
+		String modifyHAWBAdditionalContacts = "/icargo-api/qf/enterprise/v1/awbs/" + iData("awbHawb") + "/hawbs/"
+				+ iData("hawb_num1") + "H1" + "/additionalcontacts";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("captureAWBContacts.json", tagName1, tagValues1);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(modifyHAWBAdditionalContacts).then().statusCode(200).and()
+				.log().all().extract().response();
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("hawb additional contacts saved successfully"),
+				"HAWB additional contacts Saved Successfully");
+
+	}
+
+	// List AWB Split details
+	@Test(enabled = true, priority = 96)
+	@IRaftTest(testCaseID = "TC_QF_96", testDesc = "List AWB Split details", author = "A-10839")
+	public void listAWBSplitdetails() throws Exception {
+
+		String listAWBSplitdetails = "/icargo-api/qf/enterprise/v1/awbs/" + iData("document_number3")
+				+ "/split-information";
+		APIUtil sp1 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		Response resp1 = sp1.sendRESTGETRequest(listAWBSplitdetails, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+
+		JSONArray responseArray = new JSONArray(resp1.asString());
+		JSONObject respJson = responseArray.getJSONObject(0);
+
+		String PIECES = sp1.getNodeValueFromJsonResponse(respJson, "pieces");
+		String WEIGHT = sp1.getNodeValueFromJsonResponse(respJson, "weight");
+
+		Assert.assertEquals("PIECES - Verified", PIECES, lData("PIECES"));
+		Assert.assertEquals("WEIGHT - Verified", WEIGHT, lData("WEIGHT") + ".0");
+
+	}
+
+	// Create flight schedule details
+	@Test(enabled = true, priority = 97)
+	@IRaftTest(testCaseID = "TC_QF_97", testDesc = "Create  flight  schedule details", author = "A-10839")
+	public void createFlightSchedule() throws Exception {
+		String fltNoSchedule = BizUtility.createFlightNumWithRange(1000, 2999);
+
+		TestData.setInterimData(className, "start_date", BasePage.getDate(0, "YYYY-MM-dd"));
+		TestData.setInterimData(className, "end_date", BasePage.getDate(+1, "YYYY-MM-dd"));
+
+		TestData.setInterimData(className, "fltNoSchedule", fltNoSchedule);
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName1 = { "flight_number", "start_date", "end_date", "leg[0].operating_reference[0].flight_number",
+				"leg[0].nonoperating_reference[0].flight_number" };
+
+		String[] tagValues1 = { iData("fltNoSchedule"), iData("start_date"), iData("end_date"), iData("fltNoSchedule"),
+				iData("fltNoSchedule") };
+
+		String createFlightSchedule = "/icargo-api/qf/enterprise/v1/flights/saveschedule";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("createFlightSchedule.json", tagName1, tagValues1);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(createFlightSchedule).then().statusCode(200).and().log()
+				.all().extract().response();
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+
+	// Update flight schedule details
+	@Test(enabled = true, priority = 98)
+	@IRaftTest(testCaseID = "TC_QF_98", testDesc = "Update  flight  schedule details", author = "A-10839")
+	public void updateFlightSchedule() throws Exception {
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName1 = { "flight_number", "start_date", "end_date", "leg[0].operating_reference[0].flight_number",
+				"leg[0].nonoperating_reference[0].flight_number", "leg[0].aircraft" };
+
+		String[] tagValues1 = { iData("fltNoSchedule"), iData("start_date"), iData("end_date"), iData("fltNoSchedule"),
+				iData("fltNoSchedule"), "762" };
+
+		String createFlightSchedule = "/icargo-api/qf/enterprise/v1/flights/saveschedule";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp.updateNestedJson("createFlightSchedule.json", tagName1, tagValues1);
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson1 + "]").when().post(createFlightSchedule).then().statusCode(200).and().log()
+				.all().extract().response();
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("update successful"), "Update successful");
+
+	}
+
+//Validate booking
+	@Test(enabled = true, priority = 99)
+	@IRaftTest(testCaseID = "TC_QF_99", testDesc = "Validate booking", author = "A-10839")
+	public void validateBooking() throws Exception {
+
+		String[] tagName2 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue2 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJsonwithJsonObjects("findNext.json", tagName2, tagValue2);
+		Response resp2 = sp2.sendRESTPOSTRequest(nextAWB_endpoint, requestjson2, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response2 = sp2.returnJSONObjectFromResponse(resp2);
+
+		String validateAWB = sp2.getNodeValueFromJsonResponse(response2, "document_number");
+		TestData.setInterimData(className, "validateAWB", validateAWB);
+
+		String[] tagName = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date", "flights[0].departure_airport",
+				"flights[0].arrival_airport" };
+		String[] tagValue = { iData("validateAWB"), lData("ORIGIN"), lData("DESTINATION"), iData("STD2").split("T")[0],
+				lData("AGENT_BOOK"), lData("SCC"), lData("SCC"), gData("COMPANY_CODE"), iData("qfflight"),
+				iData("STD2").split("T")[0], lData("ORIGIN"), lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("validateAWB");
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("normalBookingNeo.json", tagName, tagValue);
+
+		Response resp = sp.sendRESTPOSTRequest(endPoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json");
+		JSONObject responsejson = sp.returnJSONObjectFromResponse(resp);
+
+		String validateAWB1 = sp.getNodeValueFromJsonResponse(responsejson, "awb");
+		TestData.setInterimData(className, "validateAWB", validateAWB1);
+		String status = sp.getNodeValueFromJsonResponse(responsejson, "booking_status");
+		Assert.assertTrue("CFM", status.contains("CFM"));
+		String Reference = sp.getNodeValueFromJsonResponse(responsejson, "booking_reference");
+		TestData.setInterimData(className, "Reference", Reference);
+
+		String[] tagName3 = { "awb", "booking_reference", "shipping_date", "flights[0].flight_number",
+				"departure_date" };
+		Object[] tagValue3 = { iData("validateAWB1"), iData("Reference"), iData("start_date"), iData("qfflight"),
+				iData("start_date") };
+
+		String validateBooking = "/icargo-api/qf/enterprise/v1/bookings/validate/" + lData("ORIGIN") + "/"
+				+ lData("DESTINATION") + "/" + iData("start_date");
+		APIUtil sp3 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson3 = sp3.updateNestedJsonwithJsonObjects("validateBooking.json", tagName3, tagValue3);
+		Response resp3 = sp3.sendRESTPOSTRequestWithStatusCode(validateBooking, requestjson3, 204, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+
+	}
+
+//	Sync Booking details for a shipment.
+	@Test(enabled = true, priority = 100)
+	@IRaftTest(testCaseID = "TC_QF_100", testDesc = "Sync Booking details for a shipment", author = "A-10839")
+	public void syncBooking() throws Exception {
+
+		String[] tagName3 = { "awb", "booking_reference", "shipping_date", "flights[0].flight_number",
+				"departure_date" };
+		Object[] tagValue3 = { iData("validateAWB1"), iData("Reference"), iData("start_date"), iData("qfflight"),
+				iData("start_date") };
+
+		String syncBooking = "/icargo-api/qf/enterprise/v1/bookings/sync/awbs/" + iData("validateAWB1");
+		APIUtil sp3 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson3 = sp3.updateNestedJsonwithJsonObjects("validateBooking.json", tagName3, tagValue3);
+		Response resp3 = sp3.sendRESTPOSTRequestWithStatusCode(syncBooking, requestjson3, 204, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+
+	}
+
+	// Find list of bookings
+	@Test(enabled = true, priority = 101)
+	@IRaftTest(testCaseID = "TC_QF_101", testDesc = "Find list of bookings", author = "A-10839")
+	public void findListBookings() throws Exception {
+
+		String[] tagName3 = { "awb", "flight.flight_number", "flight.departure_date" };
+		Object[] tagValue3 = { iData("docno"), iData("qfflight"), iData("start_date") };
+
+		String findListBookings = "/icargo-api/qf/enterprise/v1/bookings/" + iData("start_date") + "/"
+				+ iData("start_date") + "/search";
+
+		APIUtil sp3 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson3 = sp3.updateNestedJsonwithJsonObjects("findListbooking.json", tagName3, tagValue3);
+		logger.info(requestjson3);
+		Response resp3 = sp3.sendRESTPOSTRequest(findListBookings, requestjson3, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONArray responseArray = new JSONArray(resp3.asString());
+		JSONObject respJson = responseArray.getJSONObject(0);
+
+		String AWB = sp3.getNodeValueFromJsonResponse(respJson, "awb");
+		String ORIGIN = sp3.getNodeValueFromJsonResponse(respJson, "origin");
+
+		Assert.assertEquals("AWB - Verified", AWB, iData("docno"));
+		Assert.assertEquals("ORIGIN - Verified", ORIGIN, lData("ORIGIN"));
+
+	}
+
+//Create multisector booking
+	@Test(enabled = true, priority = 102)
+	@IRaftTest(testCaseID = "TC_QF_102", testDesc = "Create multisector booking", author = "A-10839")
+	public void createMultisectorBooking() throws Exception {
+
+		String[] tagName2 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue2 = { lData("AGENT_INTER"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJsonwithJsonObjects("findNext.json", tagName2, tagValue2);
+		Response resp2 = sp2.sendRESTPOSTRequest(nextAWB_endpoint, requestjson2, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response2 = sp2.returnJSONObjectFromResponse(resp2);
+
+		String multiAWB = sp2.getNodeValueFromJsonResponse(response2, "document_number");
+		TestData.setInterimData(className, "multiAWB", multiAWB);
+
+		login(gData("OPS_USERNAMENEW")).goToFLT003()
+				.listNewFlightWithRequiredRange("1000", "2999", gData("CARRIER_CODE"), ".", "multi1", "multiDate",
+						"fullmulti", className)
+				.setRouteAndFlightDetails(lData("ROUTE"), lData("SCHEDULE_TYPE"), lData("FLIGHT_TYPE"))
+				.clickLegDetails().setLegDepartureArrival("", lData("DEP_TIME"), "", lData("ARR_TIME"))
+				.setLegCapacity(lData("AIRCRAFT_TYPE"), "", "", "").clickLegDetailsOK().save().close();
+		login(gData("OPS_USERNAMENEW")).goToFLT003()
+				.listNewFlightWithRequiredRange("1000", "2999", gData("CARRIER_CODE"), ".", "multi2", "multiDate2",
+						"fullmulti2", className)
+				.setRouteAndFlightDetails("MEL-SIN", lData("SCHEDULE_TYPE"), lData("FLIGHT_TYPE")).clickLegDetails()
+				.setLegDepartureArrival("", lData("DEP_TIME1"), "", lData("ARR_TIME1"))
+				.setLegCapacity(lData("AIRCRAFT_TYPE"), "", "", "").clickLegDetailsOK().save().close();
+
+		String[] tagName3 = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date", "flights[1].flight_number",
+				"flights[1].departure_date" };
+		String[] tagValues3 = { iData("multiAWB"), lData("ORIGIN"), "SIN", iData("STD"), lData("AGENT_INTER"),
+				lData("SCC"), lData("SCC"), gData("COMPANY_CODE"), iData("multi1"), iData("STD"), iData("multi2"),
+				iData("STD") };
+
+		String createMultisectorBooking = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("multiAWB");
+		;
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("multisectorBooking.json", tagName3, tagValues3);
+
+		Response resp = sp.sendRESTPOSTRequest(createMultisectorBooking, requestjson, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json");
+		JSONObject response1 = sp.returnJSONObjectFromResponse(resp);
+		String AWBMulti = sp.getNodeValueFromJsonResponse(response1, "awb");
+
+		Assert.assertEquals("AWB  - Verified", iData("multiAWB"), AWBMulti);
+
+	}
+
+//Create loose shipment
+	@Test(enabled = true, priority = 103)
+	@IRaftTest(testCaseID = "TC_QF_103", testDesc = "Create loose shipment", author = "A-10839")
+	public void createLooseShipment() throws Exception {
+		String[] tagName2 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue2 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJsonwithJsonObjects("findNext.json", tagName2, tagValue2);
+		Response resp2 = sp2.sendRESTPOSTRequest(nextAWB_endpoint, requestjson2, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response2 = sp2.returnJSONObjectFromResponse(resp2);
+
+		String looseAWB1 = sp2.getNodeValueFromJsonResponse(response2, "document_number");
+		TestData.setInterimData(className, "looseAWB1", looseAWB1);
+
+		String[] tagName3 = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date" };
+		String[] tagValues3 = { iData("looseAWB1"), lData("ORIGIN"), lData("DESTINATION"), iData("STD"), lData("AGENT"),
+				lData("SCC"), lData("SCC"), gData("COMPANY_CODE"), iData("qfflight"), iData("STD") };
+
+		String createSplitBooking = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("looseAWB1");
+		;
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("createLooseShipment.json", tagName3, tagValues3);
+		logger.info(requestjson);
+		Response resp = sp.sendRESTPOSTRequest(createSplitBooking, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json");
+		JSONObject response1 = sp.returnJSONObjectFromResponse(resp);
+		String AWBLoose = sp.getNodeValueFromJsonResponse(response1, "awb");
+
+		Assert.assertEquals("AWB  - Verified", iData("looseAWB1"), AWBLoose);
+
+	}
+
+	// Cancel the booking for the shipment
+	@Test(enabled = true, priority = 104)
+	@IRaftTest(testCaseID = "TC_QF_104", testDesc = "Cancel the booking for the shipment", author = "A-10839")
+	public void cancelBookingShipment() throws Exception {
+		Thread.sleep(40000);
+		String CANCEL_ENDPOINT = lData("NEO_URL") + "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("looseAWB1");
+		APIUtil api = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		Response resp = api.sendRESTDELETERequest(CANCEL_ENDPOINT, "Content-Type", "application/json", "x-api-key",
+				lData("API_KEY"), "ICO-Authorization", iData("sessionId"));
+		JSONObject response1 = api.returnJSONObjectFromResponse(resp);
+		String Status = api.getNodeValueFromJsonResponse(response1, "booking_status");
+
+		Assert.assertEquals("STATUS  - Verified", lData("STATUS_CAN"), Status);
+
+	}
+
+	// Create ULD shipment
+	// Create booking with dimensions
+	@Test(enabled = true, priority = 105)
+	@IRaftTest(testCaseID = "TC_QF_105", testDesc = "Create ULD shipment", author = "A-10839")
+	public void createULDShipment() throws Exception {
+		String[] tagName2 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue2 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJsonwithJsonObjects("findNext.json", tagName2, tagValue2);
+		Response resp2 = sp2.sendRESTPOSTRequest(nextAWB_endpoint, requestjson2, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response2 = sp2.returnJSONObjectFromResponse(resp2);
+
+		String ULDAWB1 = sp2.getNodeValueFromJsonResponse(response2, "document_number");
+		TestData.setInterimData(className, "ULDAWB1", ULDAWB1);
+
+		String[] tagName3 = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code", "flights[0].flight_carrier",
+				"flights[0].flight_number", "flights[0].departure_date" };
+		String[] tagValues3 = { iData("ULDAWB1"), lData("ORIGIN"), lData("DESTINATION"), iData("STD"), lData("AGENT"),
+				lData("SCC"), lData("SCC"), gData("COMPANY_CODE"), iData("qfflight"), iData("STD") };
+
+		String createULDShipment = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("ULDAWB1");
+		;
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("uldBooking.json", tagName3, tagValues3);
+		logger.info(requestjson);
+		Response resp = sp.sendRESTPOSTRequest(createULDShipment, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json");
+		JSONObject response1 = sp.returnJSONObjectFromResponse(resp);
+		String AWBULD = sp.getNodeValueFromJsonResponse(response1, "awb");
+		Assert.assertEquals("AWB  - Verified", iData("ULDAWB1"), AWBULD);
+
+	}
+
+//Create booking with AVI shipment
+	@Test(enabled = true, priority = 106)
+	@IRaftTest(testCaseID = "TC_QF_106", testDesc = "Create booking with AVI shipment", author = "A-10839")
+	public void createBookingAVIShipment() throws Exception {
+		String aviFlight = BizUtility.createFlightNumWithRange(1000, 2999);
+		TestData.setInterimData(className, "aviFlight", aviFlight);
+		String aviFlightfull = gData("CARRIER_CODE") + aviFlight;
+		TestData.setInterimData(className, "aviFlightfull", aviFlightfull);
+		TestData.setInterimData(className, "fltNo1_date", BasePage.getDate(0, "dd-MMM-YYYY"));
+		TestData.setInterimData(className, "STD", BasePage.getDate(0, "YYYY-MM-dd"));
+		String[] tagName1 = { "owner", "truck_type", "offer_display", "truck_vendor", "schedule_type", "flight_number",
+				"origin", "destination", "control_office", "leg[0].STA", "leg[0].STD", "leg[0].departure_position",
+				"leg[0].origin", "leg[0].aircraft", "leg[0].destination", "leg[0].departure_gate", "leg[0].ATA",
+				"leg[0].operating_reference[0].flight_number", "leg[0].operating_reference[0].carrier_code",
+				"leg[0].ATD", "leg[0].departure_terminal", "leg[0].service_type", "leg[0].ETA", "leg[0].ETD",
+				"leg[0].nonoperating_reference[0].flight_number", "leg[0].nonoperating_reference[0].carrier_code",
+				"leg[0].tail_number", "leg[0].arrival_position", "leg[0].aircraft_owner", "leg[0].arrival_gate",
+				"leg[0].arrival_terminal", "control_stations", "route", "flight_date", "flight_type", "domestic_flight",
+				"remarks", "carrier_code", "status", };
+
+		Object[] tagValue1 = { "QF", "FLTBED", true, "DHLSYD", "Own", aviFlight, "SYD", "MEL", "SYD",
+				iData("STD") + "T23:39:57+10:00", iData("STD") + "T01:13:57+10:00", "T3", "SYD", "789", "MEL", "BAY1",
+				iData("STD") + "T23:39:57+10:00", aviFlight, "QF", iData("STD") + "T01:30:57+10:00", "T1", "J",
+				iData("STD") + "T23:39:57+10:00", iData("STD") + "T01:30:57+10:00", aviFlight, "QF", "ZKFXL", "F1",
+				"QF", "BAY3", "T3", "SYD", "SYD-MEL", iData("STD"), "Combination", false, "Flight remarks", "QF",
+				"Active", };
+
+		String endPoint1 = "/icargo-api/qf/enterprise/v1/flights/" + aviFlightfull + "-" + iData("fltNo1_date");
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("saveFlight.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(endPoint1, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("update successful"), "Update successful");
+
+		String[] tagName = { "awb", "origin", "destination", "shipping_date", "agent_code", "special_handling_codes",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code",
+				"shipment_details[0].nature_of_goods", "flights[0].flight_carrier", "flights[0].flight_number",
+				"flights[0].departure_date", "flights[0].departure_airport", "flights[0].arrival_airport" };
+		Object[] tagValue = { iData("ULDAWB1"), lData("ORIGIN"), lData("DESTINATION"), iData("STD"),
+				lData("AGENT_BOOK"), "[\"" + lData("SCC_AVI") + "\"]", lData("SCC_AVI"), lData("SCC_AVI"),
+				lData("SCC_NATURE"), gData("COMPANY_CODE"), iData("aviFlight"), iData("STD"), lData("ORIGIN"),
+				lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("ULDAWB1");
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJsonwithJsonArray("normalBookingNeo.json", tagName, tagValue);
+
+		Response resp = sp.sendRESTPOSTRequest(endPoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson = sp.returnJSONObjectFromResponse(resp);
+		String AWB4 = sp.getNodeValueFromJsonResponse(responsejson, "awb");
+		String status = sp.getNodeValueFromJsonResponse(responsejson, "booking_status");
+		Assert.assertTrue("CFM", status.contains("CFM"));
+
+	}
+
+	// Capture ULD acceptance
+	@Test(enabled = true, priority = 107)
+	@IRaftTest(testCaseID = "TC_QF_107", testDesc = "Capture ULD acceptance", author = "A-10839")
+	public void captureULDAcceptance() throws Exception {
+
+		TestData.setInterimData(className, "AWBULD", iData("ULDAWB1").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("AWBULD"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").executeAWB().verifyAWBOnExecute("", className)
+				.getAWBStatus("Executed").close();
+		String[] tagName = {};
+		String[] tagValues = {};
+
+		String captureAcceptance = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("ULDAWB1");
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("ULDAcceptance.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(captureAcceptance, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+	}
+
+	// Delete acceptance details
+	@Test(enabled = false, priority = 108)
+	@IRaftTest(testCaseID = "TC_QF_108", testDesc = "Delete acceptance details", author = "A-10839")
+	public void deleteAcceptanceDetails() throws Exception {
+		String deleteAcceptanceDetails = lData("NEO_URL") + "/icargo-api/qf/enterprise/v1/acceptances/"
+				+ lData("ORIGIN") + "/awbs/" + iData("ULDAWB1");
+		logger.info(deleteAcceptanceDetails);
+		APIUtil api = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		Response resp = api.sendRESTDELETERequest(deleteAcceptanceDetails, "Content-Type", "application/json",
+				"x-api-key", lData("API_KEY"), "ICO-Authorization", iData("sessionId"));
+
+	}
+
+//Capture the actual weight of an unit
+	@Test(enabled = true, priority = 109)
+	@IRaftTest(testCaseID = "TC_QF_109", testDesc = "Capture the actual weight of an unit", author = "A-10839")
+	public void captureWeightUnit() throws Exception {
+
+		String[] tagName = {};
+		String[] tagValues = {};
+		String captureULDWeight = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/ulds/"
+				+ "ABB12126SQ" + "/weigh";
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureUnitWeigh.json", tagName, tagValues);
+		logger.info(requestjson);
+		Response resp = sp.sendRESTPOSTRequest(captureULDWeight, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("weight update successful"),
+				"Weight update successful");
+
+	}
+
+	// Update DWS status of flight
+	@Test(enabled = true, priority = 110)
+	@IRaftTest(testCaseID = "TC_QF_110", testDesc = "Update DWS status of flight", author = "A-10839")
+	public void updateDWSStatusflight() throws Exception {
+
+		RestAssured.baseURI = lData("NEO_URL");
+
+		String updateDWSStatusflight = "/icargo-api/qf/enterprise/v1/deadloads/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("fltNo2") + "-" + iData("cancelDT") + "/dwsstatus/UWSPRV ";
+		logger.info(updateDWSStatusflight);
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+
+		Response res = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY")).when()
+				.post(updateDWSStatusflight).then().statusCode(200).and().log().all().extract().response();
+		BasePage.Assert.assertTrue(res.asString().toLowerCase().contains("dws status updated successfully"),
+				"DWS Status updated successfully");
+
+	}
+
+//AWB unassign
+	@Test(enabled = true, priority = 114)
+	@IRaftTest(testCaseID = "TC_QF_111", testDesc = "AWB unassign", author = "A-10839")
+	public void awbUnassign() throws Exception {
+		String[] tagName = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues = { lData("ORIGIN"), lData("DESTINATION") };
+		String awbUnassign = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT") + "/ulds/" + iData("uldno3")
+				+ "/awbs/" + iData("AWB_notoc") + "/unassign";
+
+		APIUtil sp = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("AWBUnassign.json", tagName, tagValues);
+		Response resp = sp.sendRESTPOSTRequest(awbUnassign, requestjson, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("unassign successful"),
+				"Unassign successful");
+	}
+
+	// Capture Notoc for DG/SL shipment
+	@Test(enabled = true, groups = { "QF" }, priority = 112)
+	@IRaftTest(testCaseID = "TC_QF_112", testDesc = "Capture Notoc for DG/SL shipment", author = "A-10839")
+	public void captureNotocDGSLShipment() throws Exception {
+
+		String[] tagName = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJsonwithJsonObjects("findNext.json", tagName, tagValue);
+
+		Response resp = sp.sendRESTPOSTRequest(nextAWB_endpoint, requestjson, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response = sp.returnJSONObjectFromResponse(resp);
+
+		String SL_notoc = sp.getNodeValueFromJsonResponse(response, "document_number");
+		TestData.setInterimData(className, "SL_notoc", SL_notoc);
+
+//booking
+
+		String[] tagName1 = { "awb", "origin", "destination", "shipping_date", "agent_code",
+				"shipment_details[0].nature_of_goods", "flights[0].flight_carrier", "flights[0].flight_number",
+				"flights[0].departure_date", "flights[0].departure_airport", "flights[0].arrival_airport" };
+
+		Object[] tagValue1 = { iData("SL_notoc"), lData("ORIGIN"), lData("DESTINATION"), iData("STD"),
+				lData("AGENT_BOOK"), lData("SHIPPING_NAME"), gData("COMPANY_CODE"), iData("NotocFlt"), iData("STD"),
+				lData("ORIGIN"), lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("SL_notoc");
+		APIUtil sp1 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonArray("captureNotocDGSL.json", tagName1, tagValue1);
+
+		Response resp1 = sp1.sendRESTPOSTRequest(endPoint, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson1 = sp1.returnJSONObjectFromResponse(resp1);
+		String AWB1 = sp1.getNodeValueFromJsonResponse(responsejson1, "awb");
+		System.out.println("AWB number:" + AWB1);
+		String status = sp1.getNodeValueFromJsonResponse(responsejson1, "booking_status");
+		Assert.assertTrue("CFM", status.contains("CFM"));
+
+// capture awb details
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName2 = { "special_handling_code", "shipping_name", "no_of_packages", "net_quantity" };
+		String[] tagValues2 = { lData("SCC_DG"), lData("SHIPPING_NAME"), lData("NO_PKGS"), lData("NET_QTY") };
+
+		String dg_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("SL_notoc") + "/dangerous-goods-information";
+
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJson("captureAwbDg.json", tagName2, tagValues2);
+		Thread.sleep(40000);
+		Response res2 = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson2 + "]").when().post(dg_endpoint).then().statusCode(200).and().log().all()
+				.extract().response();
+
+		BasePage.Assert.assertTrue(res2.asString().toLowerCase().contains("update successful"), "Update successful");
+//acceptance
+		TestData.setInterimData(className, "AWBSL", iData("SL_notoc").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("AWBSL"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").clickSplitShipment()
+				.addSplitShipmentDetails(lData("PIECES"), lData("WEIGHT"), "", 1, "ICE").executeAWB()
+				.verifyAWBOnExecute("", className).getAWBStatus("Executed").close();
+		String[] tagName4 = { "acceptance_details[0].pieces", "acceptance_details[0].weight", };
+		String[] tagValues4 = { lData("PIECES"), lData("WEIGHT") };
+
+		String captureAcceptance = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("SL_notoc");
+		APIUtil sp4 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson4 = sp4.updateNestedJson("dgAcceptance.json", tagName4, tagValues4);
+		Response resp4 = sp4.sendRESTPOSTRequest(captureAcceptance, requestjson4, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp4.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+
+//uld buildup
+		String uldnoSL = BizUtility.createULDNum(lData("ULDTYPE"), lData("OAL"));
+		TestData.setInterimData(className, "uldnoSL", uldnoSL);
+		String[] tagName5 = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues5 = { lData("ORIGIN"), lData("DESTINATION") };
+
+		String uLDBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldnoSL");
+
+		APIUtil sp5 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson5 = sp5.updateNestedJson("uldBuildup.json", tagName5, tagValues5);
+		Response resp5 = sp5.sendRESTPOSTRequest(uLDBuildUp, requestjson5, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp5.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+
+		// screening
+		String[] screeningMethod = new String[] { lData("SCREENINGMETHOD") };
+		String[] pcs = new String[] { lData("PIECES") };
+		String[] wt = new String[] { lData("WEIGHT") };
+		String[] result = new String[] { lData("RESULT") };
+		login(gData("OPS_USERNAMENEW"))
+				.goToOPR339().listAWB(gData("AWB_PREFIX"), iData("AWBSL")).screeningCapture(screeningMethod, pcs, wt,
+						result, new String[] { "" }, new String[] { "" }, new String[] { "" })
+				.screeningSave(true).listAWB(gData("AWB_PREFIX"), iData("AWBSL")).close();
+//AWB build up
+		String[] tagName6 = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues6 = { lData("ORIGIN"), lData("DESTINATION") };
+		String aWBBuildUp = "/icargo-api/qf/enterprise/v1/buildups/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldnoSL") + "/awbs/" + iData("SL_notoc");
+
+		APIUtil sp6 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson6 = sp6.updateNestedJson("AwbBuildup.json", tagName6, tagValues6);
+		Response resp6 = sp6.sendRESTPOSTRequest(aWBBuildUp, requestjson6, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp6.asString().toLowerCase().contains("buildup successful"), "Buildup successful");
+
+		// notoc entry
+		String[] tagName7 = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues7 = { lData("ORIGIN"), lData("DESTINATION") };
+		String captureNotocEntry = "/icargo-api/qf/enterprise/v1/notoc/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldnoSL") + "/awbs/" + iData("SL_notoc");
+
+		APIUtil sp7 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson7 = sp7.updateNestedJson("captureNotoc.json", tagName7, tagValues7);
+		Response resp7 = sp7.sendRESTPOSTRequest(captureNotocEntry, requestjson7, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp7.asString().toLowerCase().contains("notoc entry saved successfully"),
+				"NOTOC entry saved successfully");
+	}
+
+	// Remove NOTOC shipment
+	@Test(enabled = true, groups = { "QF" }, priority = 113)
+	@IRaftTest(testCaseID = "TC_QF_113", testDesc = "Remove NOTOC shipment", author = "A-10839")
+	public void removeNotoc() throws Exception {
+
+		String removeNotoc = lData("NEO_URL") + "/icargo-api/qf/enterprise/v1/notoc/" + lData("ORIGIN") + "/flights/"
+				+ gData("CARRIER_CODE") + "-" + iData("NotocFlt") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldno3") + "/awbs/" + iData("AWB_notoc") + "/remove";
+		String[] tagName7 = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues7 = { lData("ORIGIN"), lData("DESTINATION") };
+		logger.info(removeNotoc);
+		APIUtil sp7 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson7 = sp7.updateNestedJson("removeNotoc.json", tagName7, tagValues7);
+		Response resp7 = sp7.sendRESTPOSTRequest(removeNotoc, requestjson7, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp7.asString().toLowerCase().contains("notoc updated successfully"),
+				"NOTOC updated successfully");
+	}
+
+	// Capture part delivery
+	@Test(enabled = true, groups = { "QF" }, priority = 115)
+	@IRaftTest(testCaseID = "TC_QF_114", testDesc = "Capture part delivery", author = "A-10839")
+	public void capturePartDelivery() throws Exception {
+
+		String[] screeningMethod = new String[] { lData("SCREENINGMETHOD") };
+		String[] pcs = new String[] { lData("PIECES") };
+		String[] wt = new String[] { lData("WEIGHT") };
+		String[] result = new String[] { lData("RESULT") };
+		String partFlight = BizUtility.createFlightNumWithRange(1000, 2999);
+		TestData.setInterimData(className, "partFlight", partFlight);
+		String partFlightfull = gData("CARRIER_CODE") + partFlight;
+		TestData.setInterimData(className, "partFlightfull", partFlightfull);
+		TestData.setInterimData(className, "partflight_date", BasePage.getDate(0, "dd-MMM-YYYY"));
+		TestData.setInterimData(className, "STD", BasePage.getDate(0, "YYYY-MM-dd"));
+		String[] tagName1 = { "owner", "truck_type", "offer_display", "truck_vendor", "schedule_type", "flight_number",
+				"origin", "destination", "control_office", "leg[0].STA", "leg[0].STD", "leg[0].departure_position",
+				"leg[0].origin", "leg[0].aircraft", "leg[0].destination", "leg[0].departure_gate", "leg[0].ATA",
+				"leg[0].operating_reference[0].flight_number", "leg[0].operating_reference[0].carrier_code",
+				"leg[0].ATD", "leg[0].departure_terminal", "leg[0].service_type", "leg[0].ETA", "leg[0].ETD",
+				"leg[0].nonoperating_reference[0].flight_number", "leg[0].nonoperating_reference[0].carrier_code",
+				"leg[0].tail_number", "leg[0].arrival_position", "leg[0].aircraft_owner", "leg[0].arrival_gate",
+				"leg[0].arrival_terminal", "control_stations", "route", "flight_date", "flight_type", "domestic_flight",
+				"remarks", "carrier_code", "status", };
+
+		Object[] tagValue1 = { "QF", "FLTBED", true, "DHLSYD", "Own", partFlight, "SYD", "MEL", "SYD",
+				iData("STD") + "T23:39:57+10:00", iData("STD") + "T01:13:57+10:00", "T3", "SYD", "789", "MEL", "BAY1",
+				iData("STD") + "T23:39:57+10:00", partFlight, "QF", iData("STD") + "T01:30:57+10:00", "T1", "J",
+				iData("STD") + "T23:39:57+10:00", iData("STD") + "T01:30:57+10:00", partFlight, "QF", "ZKFXL", "F1",
+				"QF", "BAY3", "T3", "SYD", "SYD-MEL", iData("STD"), "Combination", false, "Flight remarks", "QF",
+				"Active", };
+
+		String endPoint1 = "/icargo-api/qf/enterprise/v1/flights/" + partFlightfull + "-" + iData("partflight_date");
+		APIUtil sp1 = new APIUtil("shared", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson1 = sp1.updateNestedJsonwithJsonObjects("saveFlight.json", tagName1, tagValue1);
+		Response resp1 = sp1.sendRESTPOSTRequest(endPoint1, requestjson1, "ICO-Authorization", iData("sessionId"),
+				"x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		BasePage.Assert.assertTrue(resp1.asString().toLowerCase().contains("update successful"), "Update successful");
+
+//doc number
+		String[] tagName2 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue2 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp2 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson2 = sp2.updateNestedJsonwithJsonObjects("findNext.json", tagName2, tagValue2);
+		Response resp2 = sp2.sendRESTPOSTRequest(nextAWB_endpoint, requestjson2, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response2 = sp2.returnJSONObjectFromResponse(resp2);
+
+		String partAwb = sp2.getNodeValueFromJsonResponse(response2, "document_number");
+		TestData.setInterimData(className, "partAwb", partAwb);
+//booking1
+		String[] tagNames = { "awb", "origin", "destination", "shipping_date", "agent_code", "special_handling_codes",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code",
+				"shipment_details[0].nature_of_goods", "flights[0].flight_carrier", "flights[0].flight_number",
+				"flights[0].departure_date", "flights[0].departure_airport", "flights[0].arrival_airport" };
+		Object[] tagValues = { iData("partAwb"), lData("ORIGIN"), lData("DESTINATION"), iData("STD"),
+				lData("AGENT_BOOK"), "[\"" + lData("SCC_DG") + "\"]", lData("SCC_DG"), lData("SCC_DG"),
+				lData("SHIPPING_NAME"), gData("COMPANY_CODE"), iData("partFlight"), iData("STD"), lData("ORIGIN"),
+				lData("DESTINATION") };
+
+		String endPoint = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("partAwb");
+
+		APIUtil sp3 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson3 = sp3.updateNestedJsonwithJsonArray("normalBookingNeo.json", tagNames, tagValues);
+
+		Response resp3 = sp3.sendRESTPOSTRequest(endPoint, requestjson3, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson3 = sp3.returnJSONObjectFromResponse(resp3);
+		String partdocno = sp3.getNodeValueFromJsonResponse(responsejson3, "awb");
+
+		System.out.println("AWB number:" + partdocno);
+		TestData.setInterimData(className, "partdocno", partdocno);
+// capture awb details
+		RestAssured.baseURI = lData("NEO_URL");
+		String[] tagName5 = { "special_handling_code", "shipping_name", "no_of_packages", "net_quantity" };
+		String[] tagValues5 = { lData("SCC_DG"), lData("SHIPPING_NAME"), lData("NO_PKGS"), lData("NET_QTY") };
+
+		String dg_endpoint = "/icargo-api/qf/enterprise/v2/awbs/" + iData("partdocno") + "/dangerous-goods-information";
+
+		APIUtil sp5 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson5 = sp5.updateNestedJson("captureAwbDg.json", tagName5, tagValues5);
+		Thread.sleep(40000);
+		Response res5 = RestAssured.given().header("Content-Type", "application/json")
+				.header("ICO-Authorization", iData("sessionId")).header("x-api-key", lData("API_KEY"))
+				.body("[" + requestjson5 + "]").when().post(dg_endpoint).then().statusCode(200).and().log().all()
+				.extract().response();
+
+		BasePage.Assert.assertTrue(res5.asString().toLowerCase().contains("update successful"), "Update successful");
+		// acceptance
+		TestData.setInterimData(className, "AWBDoc", iData("partdocno").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("AWBDoc"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").clickSplitShipment()
+				.addSplitShipmentDetails(lData("PIECES"), lData("WEIGHT"), "", 1, "ICE").executeAWB()
+				.verifyAWBOnExecute("", className).getAWBStatus("Executed").close();
+		String[] tagName4 = { "acceptance_details[0].pieces", "acceptance_details[0].weight", };
+		String[] tagValues4 = { lData("PIECES"), lData("WEIGHT") };
+
+		String captureAcceptance = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("partdocno");
+		APIUtil sp4 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson4 = sp4.updateNestedJson("dgAcceptance.json", tagName4, tagValues4);
+		Response resp4 = sp4.sendRESTPOSTRequest(captureAcceptance, requestjson4, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp4.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+
+//screening
+
+		login(gData("OPS_USERNAMENEW")).goToOPR339().listAWB(gData("AWB_PREFIX"), iData("AWBDoc"))
+				.screeningCapture(screeningMethod, pcs, wt, result, new String[] { "" }, new String[] { "" },
+						new String[] { "" })
+				.checkSecurityDataReview().screeningSave(true).listAWB(gData("AWB_PREFIX"), iData("AWBDoc")).close()
+				.goToOPR335().listAWB(gData("AWB_PREFIX"), iData("AWBDoc")).verifyAllPartsReceivedChecked()
+				.readyforcarriageCheck().acceptanceFinalizedCheck().close();
+//uld build up
+		login(gData("OPS_USERNAMENEW")).goToOPR344()
+				.listFlight(lData("CARRIER_CODE"), iData("partFlight"), iData("partflight_date"))
+				.addNewULDOrNewBarrow("uldno44", gData("DESTINATION"), "", gData("DESTINATION"), lData("ULDTYPE"),
+						gData("CARRIER_CODE"), className, true, false, "", false)
+				.selectShipmentfromLyingListforOAL("", gData("AWB_PREFIX"), iData("AWBDoc"), gData("CARRIER_CODE"),
+						false)
+				.buildUp_ToBulk_ToULD_AsULD(iData("uldno44"), gData("DESTINATION"), "", "", false, false, false)
+				.close();
+
+		// doc number1
+		String[] tagName22 = { "agent", "document_owner", "document_type", "document_subtype" };
+		Object[] tagValue22 = { lData("AGENT"), lData("DOC_OWNER"), lData("DOC_TYPE"), lData("DOC_SUBTYPE") };
+		String nextAWB_endpoint2 = "/stock/qf/enterprise/v1/documents/findNext";
+		APIUtil sp22 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson22 = sp22.updateNestedJsonwithJsonObjects("findNext.json", tagName22, tagValue22);
+		Response resp22 = sp22.sendRESTPOSTRequest(nextAWB_endpoint2, requestjson22, "ICO-Authorization",
+				iData("sessionId"), "x-api-key", lData("API_KEY"), "Content-Type", "application/json");
+		JSONObject response22 = sp22.returnJSONObjectFromResponse(resp22);
+
+		String partAwb2 = sp22.getNodeValueFromJsonResponse(response22, "document_number");
+		TestData.setInterimData(className, "partAwb2", partAwb2);
+		// booking1
+		String[] tagNames3 = { "awb", "origin", "destination", "shipping_date", "agent_code", "special_handling_codes",
+				"shipment_details[0].commodity", "shipment_details[0].handling_code",
+				"shipment_details[0].nature_of_goods", "flights[0].flight_carrier", "flights[0].flight_number",
+				"flights[0].departure_date", "flights[0].departure_airport", "flights[0].arrival_airport" };
+		Object[] tagValues3 = { iData("partAwb2"), lData("ORIGIN"), lData("DESTINATION"), iData("STD"),
+				lData("AGENT_BOOK"), "[\"" + lData("SCC_PER") + "\"]", lData("SCC_PER"), lData("SCC_PER"),
+				lData("SHIPPING_NAME"), gData("COMPANY_CODE"), iData("partFlight"), iData("STD"), lData("ORIGIN"),
+				lData("DESTINATION") };
+
+		String endPoint3 = "/icargo-api/qf/enterprise/v1/bookings/awbs/" + iData("partAwb2");
+
+		APIUtil sp33 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson33 = sp33.updateNestedJsonwithJsonArray("normalBookingNeo.json", tagNames3, tagValues3);
+
+		Response resp33 = sp33.sendRESTPOSTRequest(endPoint3, requestjson33, "ICO-Authorization", iData("sessionId"),
+				"Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		JSONObject responsejson33 = sp33.returnJSONObjectFromResponse(resp33);
+		String partdocno3 = sp33.getNodeValueFromJsonResponse(responsejson33, "awb");
+
+		System.out.println("AWB number:" + partdocno3);
+		TestData.setInterimData(className, "partdocno3", partdocno3);
+
+// acceptance
+		TestData.setInterimData(className, "AWBDoc3", iData("partdocno3").split("-")[1]);
+		login(gData("OPS_USERNAMENEW")).goToOPR026().reListAWB(gData("AWB_PREFIX"), iData("AWBDoc3"))
+				.captureSpecialCustomsInfo("T2").captureShipperDetails(lData("AGENT"), "", "", "", "")
+				.captureConsigneeDetails(lData("AGENT"), "", "", "", "").executeAWB().verifyAWBOnExecute("", className)
+				.getAWBStatus("Executed").close();
+		String[] tagName44 = { "acceptance_details[0].pieces", "acceptance_details[0].weight", };
+		String[] tagValues44 = { lData("PIECES"), lData("WEIGHT") };
+
+		String captureAcceptance4 = "/icargo-api/qf/enterprise/v1/acceptances/" + lData("ORIGIN") + "/awbs/"
+				+ iData("partdocno3");
+		APIUtil sp44 = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson44 = sp44.updateNestedJson("looseAcceptance.json", tagName44, tagValues44);
+		Response resp44 = sp44.sendRESTPOSTRequest(captureAcceptance4, requestjson44, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp44.asString().toLowerCase().contains("acceptance successful"),
+				"Acceptance successful");
+
+		// screening
+		login(gData("OPS_USERNAMENEW")).goToOPR339().listAWB(gData("AWB_PREFIX"), iData("AWBDoc3"))
+				.screeningCapture(screeningMethod, pcs, wt, result, new String[] { "" }, new String[] { "" },
+						new String[] { "" })
+				.checkSecurityDataReview().screeningSave(true).listAWB(gData("AWB_PREFIX"), iData("AWBDoc3")).close()
+				.goToOPR335().listAWB(gData("AWB_PREFIX"), iData("AWBDoc3")).verifyAllPartsReceivedChecked()
+				.readyforcarriageCheck().acceptanceFinalizedCheck().close();
+		login(gData("OPS_USERNAMENEW")).goToOPR344()
+				.listFlight(lData("CARRIER_CODE"), iData("partFlight"), iData("partflight_date"))
+				.addNewULDOrNewBarrow("BULK", "", "", "", "MEL", "", className, true, true, "", false)
+				.captureBreakdownInstruction_AWB_thruflight("", gData("AWB_PREFIX"), iData("AWBDoc3"), lData("PIECES"),
+						lData("WEIGHT"), "", "", "", "", "", false)
+				.manifestFlight(true).finalizeFlight().close();
+
+		// Breakdown
+		String[] tagName8 = { "point_of_lading", "point_of_unlading" };
+		String[] tagValues8 = { lData("ORIGIN"), lData("DESTINATION") };
+		String captureAWBBreakdown = "/icargo-api/qf/enterprise/v1/breakdowns/" + lData("DESTINATION") + "/"
+				+ gData("CARRIER_CODE") + "-" + iData("partFlight") + "-" + iData("cancelDT") + "/ulds/"
+				+ iData("uldno44") + "/awbs/" + iData("partdocno");
+		logger.info(captureAWBBreakdown);
+
+		APIUtil sp = new APIUtil("ops", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson = sp.updateNestedJson("captureAwbBreakdown.json", tagName8, tagValues8);
+		Response resp = sp.sendRESTPOSTRequest(captureAWBBreakdown, requestjson, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+		BasePage.Assert.assertTrue(resp.asString().toLowerCase().contains("breakdown successful"),
+				"Breakdown successful");
+
+		login(gData("OPS_USERNAMENEW")).goToADM009().switchRole(lData("DESTINATION"), "", "", "", "").goToOPR004()
+				.listULD(iData("uldno44"), gData("CARRIER_CODE"), iData("partFlight"), iData("cancelDT"))
+				.breakdownComptlete(false).close().goToOPR293()
+				.listWithFlightNo(gData("CARRIER_CODE"), iData("partFlight"), iData("cancelDT"))
+				.enterPickUpPersonAndCompany(lData("PICKUP_PERSON"), lData("COMPANY_NAME"))
+				.enteridDetails(lData("ID_TYPE"), lData("IDENTITY_NUMBER"), lData("ISSUING_COUNTRY"), true)
+				.generateRevalidateDeliveryID("Yes")
+				.paymentCollection(lData("PAYMENT_METHOD"), lData("PAYMENT_TEXT"), "").acceptPayment()
+				.setDeliveryDetailsToiData(iData("partdocno").split("-")[1], "", "", "DELIVERY_ID", "DN_NUMBER",
+						className)
+				.close();
+		Thread.sleep(20000);
+
+		String[] tagName9 = { "delivery_details.deliverylist_id", "pieces", "weight" };
+		String[] tagValues9 = { iData("DELIVERY_ID"), "5", "5" };
+
+		String captureAWBDelivery9 = "/icargo-api/qf/enterprise/v1/deliveries/" + lData("DESTINATION") + "/awbs/"
+				+ iData("partdocno");
+
+		APIUtil sp9 = new APIUtil("ops1", lData("NEO_URL"), true, "", "");
+		JSONObject requestjson9 = sp9.updateNestedJson("captureDeliveyAWB.json", tagName9, tagValues9);
+		Response resp9 = sp9.sendRESTPOSTRequest(captureAWBDelivery9, requestjson9, "ICO-Authorization",
+				iData("sessionId"), "Content-Type", "application/json", "x-api-key", lData("API_KEY"));
+
+		BasePage.Assert.assertTrue(resp9.asString().toLowerCase().contains("delivered successfully"),
+				"Delivered successfully");
+
+	}*/
+
+}
